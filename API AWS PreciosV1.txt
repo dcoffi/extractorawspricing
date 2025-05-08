@@ -4,6 +4,31 @@ host: EXCEL
 api_set: {}
 script:
   content: >
+    /*=============================================================================
+      Script:     AWS EC2 Script Extractor de Precios
+      Author:     Daivinson Coffi
+      Version:    1.0
+      Created:    Mayo 2025
+      Description:
+                  Este script fue desarrollado por Daivinson Coffi para obtener
+                  información de precios bajo demanda y precios reservados (1 año y 3 años,
+                  en sus variantes Upfront, Partial y No Upfront) de instancias dedicadas
+                  de Amazon EC2, y consolidar los datos automáticamente en una hoja
+                  de Excel utilizando Office Script en Script Lab.
+
+                  Compatible con Script Lab en Microsoft Excel 365.
+
+      Notas:
+                  - Requiere acceso a la API de AWS Pricing.
+                  - Asegurarse de haber configurado las credenciales AWS previamente.
+                  - Esta es la versión inicial. Se recomienda mantenimiento futuro
+                    para cubrir cambios en la API de AWS.
+
+      Derechos:
+                  © 2025 Daivinson Coffi. Puede modificar este script a su manera teniendo siempre presente el desarrollo previo de mi persona
+    =============================================================================*/
+
+
     Office.onReady((info) => {
       if (info.host === Office.HostType.Excel) {
         run(); // Aquí llamas tu función principal
