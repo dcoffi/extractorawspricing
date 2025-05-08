@@ -1,0 +1,1643 @@
+name: API AWS
+description: API de AWS para la obtención de precios de las instancias por Regiones
+host: EXCEL
+api_set: {}
+script:
+  content: >
+    Office.onReady((info) => {
+      if (info.host === Office.HostType.Excel) {
+        run(); // Aquí llamas tu función principal
+      }
+    });
+
+    let titulo = document.getElementById("titulo");
+
+    async function imprimirMensajes(mensaje) {
+      let imprimemensaje = document.getElementById("pintaMensaje");
+      imprimemensaje.innerHTML = mensaje;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+      const tooltipList = [...tooltipTriggerList].map((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl));
+      const osSelect = document.getElementById("osSelect");
+      const osIcon = document.getElementById("osIcon");
+
+      const osIcons = {
+        Linux: { icon: "fa-brands fa-linux", color: "green" },
+        Windows: { icon: "fa-brands fa-windows", color: "#0078D4" },
+        RHEL: { icon: "fa-brands fa-redhat", color: "#E00" },
+        Suse: { icon: "fa-brands fa-suse", color: "#76B900" },
+        Todos: { icon: "fa-solid fa-asterisk", color: "gray" }
+      };
+
+      function actualizarIcono() {
+        const selectedOS = osSelect.value;
+        osIcon.className = osIcons[selectedOS].icon;
+        osIcon.style.color = osIcons[selectedOS].color;
+      }
+
+      if (osSelect && osIcon) {
+        osSelect.addEventListener("change", actualizarIcono);
+        actualizarIcono();
+      } else {
+        console.warn("Elemento 'osSelect' o 'osIcon' no encontrado.");
+      }
+      /*
+      document.getElementById("consolidar").addEventListener("click", () => {
+         consolidarHojasEnUna();
+      });
+      */
+      const btnInstancias = document.getElementById("cargarInstancias");
+      //const limpiarhoja = document.getElementById("limpiarhoja");
+      const confirmYesBtn = document.getElementById("confirmYes");
+      const confirmModalTitle = document.getElementById("confirmModalLabel");
+      const confirmModalBody = document.getElementById("confirmModalBody");
+
+      if (btnInstancias) {
+        btnInstancias.addEventListener("click", () => {
+          document.getElementById("mensajeAlerta").style.display = "none";
+          const ubicacionRegion = document.getElementById("selectUbicaciones");
+          const preInstalledSoftware = document.getElementById("preInstalledSw");
+          const osSelect = document.getElementById("osSelect");
+          if (ubicacionRegion.value == "") {
+            const myModal = new bootstrap.Modal(document.getElementById("autoCierreModal"));
+            myModal.show(); // Mostrar el modal al cargar la página
+
+            setTimeout(function() {
+              myModal.hide(); // Ocultar el modal después de 3000 milisegundos (3 segundos)
+            }, 2000);
+
+            return;
+          }
+          // Cambiar dinámicamente título y cuerpo del modal
+          confirmModalTitle.innerText = "¿Desea Continuar?";
+          confirmModalBody.innerText = "Se va a ejecutar la carga de instancias. ¿Está seguro(a)?";
+
+          // Mostrar el modal
+          const confirmModal = new bootstrap.Modal(document.getElementById("confirmModal"));
+          confirmModal.show();
+
+          // Limpia eventos previos y define nuevo
+          confirmYesBtn.onclick = () => {
+            if (osSelect.value != "Todos" && titulo.innerHTML == "Instancias Compartidas") {
+              tryCatch(() => cargarInstancias(ubicacionRegion, preInstalledSoftware, osSelect));
+            } else if (osSelect.value == "Todos" && titulo.innerHTML == "Instancias Compartidas") {
+              consolidado(ubicacionRegion);
+            } else if (osSelect.value != "Todos" && titulo.innerHTML == "Alojamientos Dedicados") {
+              // console.log(`Ejecutara los SO diferentes de Dedicados`);
+              tryCatch(() => cargarInstanciasDedicadas(ubicacionRegion, osSelect));
+            } else if (osSelect.value == "Todos" && titulo.innerHTML == "Alojamientos Dedicados") {
+              //console.log(`Ejecutara todos los SO de Dedicados`);
+              tryCatch(() => cargarInstanciasDedicadas(ubicacionRegion, osSelect));
+            }
+            confirmModal.hide();
+          };
+        });
+
+        document.getElementById("guardarAWS").addEventListener("click", async () => {
+          await Excel.run(async (context) => {
+            const clave = document.getElementById("claveAWS").value;
+            const secreto = document.getElementById("secretoAWS").value;
+            const workbook = context.workbook;
+            const sheets = workbook.worksheets;
+
+            // Verifica si la hoja 'credenciales' ya existe
+            let credSheet;
+            let sheetExists = false;
+
+            sheets.load("items/name");
+
+            await context.sync();
+
+            for (let i = 0; i < sheets.items.length; i++) {
+              if (sheets.items[i].name === "credenciales") {
+                sheetExists = true;
+                credSheet = sheets.items[i];
+                break;
+              }
+            }
+
+            if (!sheetExists) {
+              credSheet = sheets.add("credenciales");
+            }
+
+            credSheet.load("visibility");
+            await context.sync();
+
+            // Desproteger y mostrar si es necesario
+            if (credSheet.visibility === Excel.SheetVisibility.hidden) {
+              credSheet.visibility = Excel.SheetVisibility.visible;
+            }
+
+            try {
+              await credSheet.protection.unprotect();
+            } catch (e) {
+              //console.log("La hoja no estaba protegida o no se pudo desproteger.");
+              await imprimirMensajes("❌ La hoja no estaba protegida o no se pudo desproteger.");
+            }
+
+            // Escribir clave y secreto
+            credSheet.getRange("A1").values = [[clave]];
+            credSheet.getRange("A2").values = [[secreto]];
+
+            // Proteger y ocultar de nuevo
+            await credSheet.protection.protect();
+            credSheet.visibility = Excel.SheetVisibility.hidden;
+
+            await context.sync();
+            const myModal = new bootstrap.Modal(document.getElementById("autoCierreModal"));
+            myModal.show(); // Mostrar el modal al cargar la página
+            let modalBody = document.getElementById("modal-body");
+            modalBody.innerHTML = "Credenciales guardadas correctamente.";
+            setTimeout(function() {
+              myModal.hide(); // Ocultar el modal después de 3000 milisegundos (3 segundos)
+            }, 4000);
+            run();
+          }).catch((error) => {
+            console.error("Error al guardar las credenciales: ", error);
+          });
+        });
+        document.getElementById("offcanvasRight").addEventListener("shown.bs.offcanvas", () => {
+          Excel.run(async (context) => {
+            const workbook = context.workbook;
+            const sheets = workbook.worksheets;
+            sheets.load("items/name");
+
+            await context.sync();
+
+            const sheet = sheets.items.find((s) => s.name === "credenciales");
+
+            if (sheet) {
+              sheet.load("visibility");
+              await context.sync();
+
+              if (sheet.visibility === Excel.SheetVisibility.hidden) {
+                sheet.visibility = Excel.SheetVisibility.visible;
+              }
+
+              try {
+                await sheet.protection.unprotect();
+              } catch (e) {
+                console.warn("La hoja no estaba protegida o no se pudo desproteger.");
+              }
+
+              const claveRange = sheet.getRange("A1");
+              const secretoRange = sheet.getRange("A2");
+              claveRange.load("values");
+              secretoRange.load("values");
+
+              await context.sync();
+
+              document.getElementById("claveAWS").value = claveRange.values[0][0] || "";
+              document.getElementById("secretoAWS").value = secretoRange.values[0][0] || "";
+
+              // Vuelve a ocultar y proteger la hoja
+              await sheet.protection.protect();
+              sheet.visibility = Excel.SheetVisibility.hidden;
+
+              await context.sync();
+            }
+          }).catch((error) => {
+            console.error("Error al cargar credenciales:", error);
+          });
+        });
+      } else {
+        console.warn("Elemento 'cargarInstancias' no encontrado.");
+      }
+    });
+
+
+    async function consolidado(ubicacionRegion) {
+      await Excel.run(async (context) => {
+        const hojasAEliminar = ["na", "SQL Web", "SQL Std", "SQL Ent"];
+        const hojas = context.workbook.worksheets;
+
+        // Intentamos eliminar cada hoja si existe
+        for (let nombreHoja of hojasAEliminar) {
+          try {
+            const hoja = hojas.getItem(nombreHoja);
+            hoja.load("name");
+            await context.sync();
+
+            hoja.delete();
+            //console.log(`🗑️ Hoja '${nombreHoja}' eliminada.`);
+            await imprimirMensajes(`🗑️ Hoja '${nombreHoja}' eliminada.`);
+          } catch (error) {
+            //console.log(`ℹ️ Hoja '${nombreHoja}' no existe, se omite.`);
+            await imprimirMensajes(`ℹ️ Hoja '${nombreHoja}' no existe, se omite.`);
+          }
+        }
+
+        await context.sync();
+      });
+
+      // Lista de valores de preInstalledSoftware y sistemaOperativo
+      const preInstalledSoftwareList = ["na", "SQL Web", "SQL Std", "SQL Ent"];
+      const sistemaOperativoList = ["Linux", "Windows", "RHEL", "SUSE"];
+
+      // Obtener los elementos reales para el primer parámetro
+      const ubicacionRegionSelect = document.getElementById("selectUbicaciones");
+
+      // Simular los <select> para los otros dos parámetros
+      for (const preSw of preInstalledSoftwareList) {
+        for (const so of sistemaOperativoList) {
+          // Crear elementos <select> simulados
+          const fakePreInstalledSelect = { value: preSw };
+          const fakeOsSelect = { value: so };
+
+          //console.log(`⏳ Procesando combinación: ${preSw} - ${so}`);
+          await imprimirMensajes(`⏳ Procesando combinación: ${preSw} - ${so}`);
+
+          try {
+            await cargarInstancias(ubicacionRegionSelect, fakePreInstalledSelect, fakeOsSelect);
+          } catch (error) {
+            //console.error(`❌ Error con ${preSw} / ${so}:`, error);
+            await imprimirMensajes(`❌ Error con ${preSw} / ${so}:`, error);
+          }
+
+          // ⏱️ Esperar 2 segundos entre llamadas
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+      // 🧩 3. Consolidar resultados
+      await consolidarHojasEnUna();
+
+      //console.log("✅ Consolidado completado.");
+      await imprimirMensajes("✅ Consolidado completado.");
+    }
+
+    async function consolidarHojasEnUna() {
+      await Excel.run(async (context) => {
+        const workbook = context.workbook;
+        const hojasOrigen = ["na", "SQL Web", "SQL Std", "SQL Ent"];
+        const hojaFinalNombre = "Consolidado";
+
+        // 🔁 Borrar hoja Consolidado si ya existe
+        try {
+          const hojaExistente = workbook.worksheets.getItem(hojaFinalNombre);
+          hojaExistente.delete();
+          //console.log(`🗑️ Hoja '${hojaFinalNombre}' eliminada.`);
+          await imprimirMensajes(`🗑️ Hoja '${hojaFinalNombre}' eliminada.`);
+        } catch (e) {
+          //console.log(`ℹ️ Hoja '${hojaFinalNombre}' no existía.`);
+          await imprimirMensajes(`ℹ️ Hoja '${hojaFinalNombre}' no existía.`);
+        }
+
+        await context.sync();
+
+        // ➕ Crear nueva hoja Consolidado
+        const hojaConsolidado = workbook.worksheets.add(hojaFinalNombre);
+        let filaDestino = 0;
+        let esPrimeraHoja = true;
+
+        for (const nombreHoja of hojasOrigen) {
+          try {
+            const hojaOrigen = workbook.worksheets.getItem(nombreHoja);
+            const rango = hojaOrigen.getUsedRange();
+            rango.load(["values", "rowCount", "columnCount"]);
+            await context.sync();
+
+            if (rango.rowCount === 0 || rango.columnCount === 0) continue;
+
+            let datos = rango.values;
+
+            // 🔁 Si no es la primera hoja, eliminar encabezado (primera fila)
+            if (!esPrimeraHoja) {
+              datos = datos.slice(3); // eliminar fila 0
+            }
+
+            if (datos.length === 0) continue;
+
+            hojaConsolidado.getRangeByIndexes(filaDestino, 0, datos.length, rango.columnCount).values = datos;
+
+            filaDestino += datos.length;
+            esPrimeraHoja = false;
+            const usedRange = hojaConsolidado.getUsedRange(); // Para detectar cuántas filas hay
+            usedRange.load("rowCount");
+            await context.sync();
+
+            const lastRow = usedRange.rowCount;
+            // Formatear la columna I (columna número 9, ya que comienza en 1)
+            const rangeColumnas = hojaConsolidado.getRange(`I3:T${lastRow}`);
+
+            rangeColumnas.numberFormat = [["0.00"]]; // Dos decimales
+
+            await context.sync();
+            await colorCelda(hojaConsolidado, "A2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "B2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "C2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "D2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "E2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "F2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "G2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "H2", "#000000", "white");
+            await colorCelda(hojaConsolidado, "A3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "B3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "C3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "D3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "E3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "F3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "G3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "H3", "#000000", "white");
+            await colorCelda(hojaConsolidado, "I2:L2", "#002060", "white");
+            await colorCelda(hojaConsolidado, "M2:N2", "#4c216d", "white");
+            await colorCelda(hojaConsolidado, "O2:P2", "#b1510f", "white");
+            await colorCelda(hojaConsolidado, "Q2:R2", "#960000", "white");
+            await colorCelda(hojaConsolidado, "S2:T2", "#002060", "white");
+            await colorCelda(hojaConsolidado, "I3", "#0070c0", "white");
+            await colorCelda(hojaConsolidado, "J3", "#0070c0", "white");
+            await colorCelda(hojaConsolidado, "K3", "#0070c0", "white");
+            await colorCelda(hojaConsolidado, "L3", "#0070c0", "white");
+            await colorCelda(hojaConsolidado, "M3", "#7030a0", "white");
+            await colorCelda(hojaConsolidado, "N3", "#7030a0", "white");
+            await colorCelda(hojaConsolidado, "O3", "#ff8500", "white");
+            await colorCelda(hojaConsolidado, "P3", "#ff8500", "white");
+            await colorCelda(hojaConsolidado, "Q3", "#ff0000", "white");
+            await colorCelda(hojaConsolidado, "R3", "#ff0000", "white");
+            await colorCelda(hojaConsolidado, "S3", "#4472c4", "white");
+            await colorCelda(hojaConsolidado, "T3", "#4472c4", "white");
+            hojaConsolidado.getRange("J3").values = [["Monthly OnDmd"]];
+            hojaConsolidado.getRange("K3").values = [["1Yr OnDmd"]];
+            hojaConsolidado.getRange("L3").values = [["3Yr OnDmd"]];
+            hojaConsolidado.getRange("M3").values = [["1Yr Std AURI"]];
+            hojaConsolidado.getRange("N3").values = [["3Yr Std AURI"]];
+            hojaConsolidado.getRange("O3").values = [["1Yr Cnvt AURI"]];
+            hojaConsolidado.getRange("P3").values = [["3Yr Cnvt AURI"]];
+            hojaConsolidado.getRange("Q3").values = [["1Yr Std PURI Ttl"]];
+            hojaConsolidado.getRange("R3").values = [["3Yr Std PURI Ttl"]];
+            hojaConsolidado.getRange("S3").values = [["1Yr Std NURI Ttl"]];
+            hojaConsolidado.getRange("T3").values = [["3Yr Std NURI Ttl"]];
+            await context.sync();
+          } catch (e) {
+            console.warn(`⚠️ No se pudo procesar la hoja '${nombreHoja}':`, e.message);
+          }
+        }
+
+        await context.sync();
+        try {
+          hojaConsolidado.activate();
+          await context.sync();
+        } catch (e) {
+          console.warn("⚠️ No se pudo activar visualmente la hoja. Probablemente el libro no está enfocado.");
+        }
+
+        // console.log(`✅ Consolidado completado en hoja '${hojaFinalNombre}' con ${filaDestino} filas.`);
+        await imprimirMensajes(`✅ Consolidado completado en hoja '${hojaFinalNombre}' con ${filaDestino} filas.`);
+      });
+    }
+
+
+    async function run() {
+      await Excel.run(async (context) => {
+        const sheet = context.workbook.worksheets.getActiveWorksheet();
+        const aws = new AwsInitializer();
+        await aws.init();
+        const pricing = new AWS.Pricing();
+        const params = { ServiceCode: "AmazonEC2" };
+        try {
+          const data = await pricing.getAttributeValues({ AttributeName: "location", ...params }).promise();
+
+          const select = document.getElementById("selectUbicaciones");
+          select.innerHTML = ""; // Limpia opciones anteriores
+
+          // Agrega opción por defecto
+          const defaultOption = document.createElement("option");
+          defaultOption.value = "";
+          defaultOption.textContent = "Seleccione una ubicación";
+          select.appendChild(defaultOption);
+
+          data.AttributeValues.forEach((rawItem) => {
+            const item = typeof rawItem === "string" ? JSON.parse(rawItem) : rawItem;
+            const instanceType = item?.Value;
+            const option = document.createElement("option");
+            option.value = instanceType;
+            option.textContent = instanceType;
+            select.appendChild(option);
+          });
+        } catch (error) {
+          //console.log("Las credenciales se han vencido o no están correctas");
+          const myModal = new bootstrap.Modal(document.getElementById("autoCierreModal"));
+          myModal.show(); // Mostrar el modal al cargar la página
+          let modalBody = document.getElementById("modal-body");
+          modalBody.innerHTML =
+            "Las credenciales se han vencido o no están correctas, por favor cargue las credenciales correctas pulsando en el boton de <strong>Credenciales</strong>";
+          setTimeout(function() {
+            myModal.hide(); // Ocultar el modal después de 3000 milisegundos (3 segundos)
+          }, 4000);
+        }
+
+        await context.sync();
+      });
+    }
+
+
+    async function cargarInstancias(ubicacionRegion, preInstalledSoftware,
+    osSelect) {
+      await Excel.run(async (context) => {
+        const sheet = context.workbook.worksheets.getActiveWorksheet();
+
+        let zona = "";
+
+        if (ubicacionRegion.value != "Seleccione una ubicación" && ubicacionRegion.value != "") {
+          zona = ubicacionRegion.value;
+        } else {
+          const myModal = new bootstrap.Modal(document.getElementById("autoCierreModal"));
+          myModal.show(); // Mostrar el modal al cargar la página
+
+          setTimeout(function() {
+            myModal.hide(); // Ocultar el modal después de 3000 milisegundos (3 segundos)
+          }, 2000);
+          // console.log("Por favor seleccione una ubicación");
+          return;
+        }
+
+        const aws = new AwsInitializer();
+        await aws.init();
+        let sistemaoperativo = osSelect.value;
+        const pricing = new AWS.Pricing();
+
+        const hoja1 = context.workbook.worksheets.getItem("SO");
+        // Encabezados de la tabla en Hoja2
+        hoja1.getRange("I1").values = [["OnDemand Pricing"]];
+        hoja1.getRange("M1").values = [["1Yr/3Yr STD AURI"]];
+        hoja1.getRange("O1").values = [["1Yr/3Yr Cnvt AURI"]];
+        hoja1.getRange("Q1").values = [["1Yr/3Yr STD PURI"]];
+        hoja1.getRange("S1").values = [["1Yr/3Yr STD NURI"]];
+
+        hoja1.getRange("A2:T2").values = [
+          [
+            "LocaciónTipoInstanciaSistemaOperativoModeloLicenciamiento",
+            "Locación",
+            "Tipo Instancia",
+            "vCPU",
+            "RAM",
+            "OS",
+            "Tenancy",
+            "SQL Lic Model",
+            "Hourly OnDmd",
+            "Monthly OnDmd",
+            "1Yr",
+            "3Yr",
+            "1Yr",
+            "3Yr",
+            "1Yr",
+            "3Yr",
+            "1Yr",
+            "3Yr",
+            "1Yr",
+            "3Yr"
+          ]
+        ];
+        let cadenaRango = "";
+        let encabezado = "";
+        let allRows = [];
+
+        try {
+          await limpiarCeldas();
+
+          const allRows = [];
+
+          const instanceTypes = new Set();
+          let nextToken = null;
+
+          do {
+            const params = {
+              ServiceCode: "AmazonEC2",
+              Filters: [
+                { Type: "TERM_MATCH", Field: "location", Value: zona },
+                { Type: "TERM_MATCH", Field: "tenancy", Value: "shared" },
+                { Type: "TERM_MATCH", Field: "operatingSystem", Value: sistemaoperativo },
+                { Type: "TERM_MATCH", Field: "preInstalledSw", Value: preInstalledSoftware.value }
+              ],
+              MaxResults: 100,
+              ...(nextToken && { NextToken: nextToken })
+            };
+
+            const data = await pricing.getProducts(params).promise();
+
+            if (!data.PriceList || data.PriceList.length === 0) {
+              document.getElementById("mensajeAlerta").style.display = "block";
+              document.getElementById(
+                "mensajeAlerta"
+              ).innerHTML = `No fueron encontrados registros para la región <strong>${zona}</strong> para el sistema operativo <strong>${sistemaoperativo}</strong>`;
+            }
+
+            data.PriceList.forEach((rawItem, index) => {
+              try {
+                const item = typeof rawItem === "string" ? JSON.parse(rawItem) : rawItem;
+
+                if (!item.product || !item.product.attributes) {
+                  console.warn(`⚠️ Sin product.attributes en índice ${index}`);
+                  return;
+                }
+
+                const instanceTypeRaw = item.product.attributes.instanceType;
+
+                if (typeof instanceTypeRaw !== "string") {
+                  console.warn(`❗ instanceType no es string en índice ${index}:`, instanceTypeRaw);
+                  return;
+                }
+
+                const instanceType = instanceTypeRaw.trim();
+
+                if (instanceType) {
+                  instanceTypes.add(instanceType);
+                } else {
+                  console.warn(`⚠️ instanceType vacío tras trim en índice ${index}`);
+                }
+              } catch (err) {
+                console.error(`❌ Error al parsear item en índice ${index}:`, err);
+              }
+            });
+
+            nextToken = data.NextToken;
+          } while (nextToken);
+          // Convierte el Set a Array para asegurar iterabilidad
+          const instanciasArray = Array.from(instanceTypes);
+          document.getElementById("spinner").style.display = "block"; // Mostrar spinner
+          // 3️⃣ Iterar por cada instanceType para obtener su precio exacto
+          let contar = 0;
+          for (const tipoInstancia of instanciasArray) {
+            const detalle = await pricing
+              .getProducts({
+                ServiceCode: "AmazonEC2",
+                Filters: [
+                  { Type: "TERM_MATCH", Field: "location", Value: zona },
+                  { Type: "TERM_MATCH", Field: "tenancy", Value: "shared" },
+                  { Type: "TERM_MATCH", Field: "operatingSystem", Value: sistemaoperativo },
+                  { Type: "TERM_MATCH", Field: "preInstalledSw", Value: preInstalledSoftware.value },
+                  { Type: "TERM_MATCH", Field: "purchaseOption", Value: "All Upfront" },
+                  { Type: "TERM_MATCH", Field: "instanceType", Value: tipoInstancia }
+                ],
+                MaxResults: 1
+              })
+              .promise();
+
+            if (!detalle.PriceList || detalle.PriceList.length === 0) continue;
+
+            const item = detalle.PriceList[0];
+            const attrs = item.product.attributes;
+
+            // Variables para almacenar precios
+            let upfrontFee1Yr = 0;
+            let upfrontFee3Yr = 0;
+            let upfrontFee1YrConvertible = 0;
+            let upfrontFee3YrConvertible = 0;
+            let upfrontFee1YrPartial = 0;
+            let upfrontFee3YrPartial = 0;
+            let hourlyNoUpfront1Yr = 0;
+            let hourlyNoUpfront3Yr = 0;
+
+            const reservedTerms = item.terms?.Reserved;
+
+            if (reservedTerms) {
+              for (const reservedKey in reservedTerms) {
+                const reservedTerm = reservedTerms[reservedKey];
+                const priceDimensions = reservedTerm?.priceDimensions || {};
+                const attributes = reservedTerm?.termAttributes || {};
+
+                // 🔹 All Upfront - 1 Año (Standard)
+                if (
+                  reservedKey.includes("6QCMYABX3D") &&
+                  attributes.LeaseContractLength === "1yr" &&
+                  attributes.PurchaseOption === "All Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
+                      upfrontFee1Yr = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 All Upfront - 3 Años (Standard)
+                if (
+                  reservedKey.includes("NQ3QZPMQV9") &&
+                  attributes.LeaseContractLength === "3yr" &&
+                  attributes.PurchaseOption === "All Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
+                      upfrontFee3Yr = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 All Upfront - 1 Año (Convertible)
+                if (
+                  reservedKey.includes("VJWZNREJX2") &&
+                  attributes.LeaseContractLength === "1yr" &&
+                  attributes.PurchaseOption === "All Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
+                      upfrontFee1YrConvertible = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 All Upfront - 3 Años (Convertible)
+                if (
+                  reservedKey.includes("MZU6U2429S") &&
+                  attributes.LeaseContractLength === "3yr" &&
+                  attributes.PurchaseOption === "All Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
+                      upfrontFee3YrConvertible = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 Partial Upfront - 1 Año
+                if (
+                  reservedKey.includes("HU7G6KETJZ") &&
+                  attributes.LeaseContractLength === "1yr" &&
+                  attributes.PurchaseOption === "Partial Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
+                      upfrontFee1YrPartial = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 Partial Upfront - 3 Años
+                if (
+                  reservedKey.includes("38NPMPTW36") &&
+                  attributes.LeaseContractLength === "3yr" &&
+                  attributes.PurchaseOption === "Partial Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
+                      upfrontFee3YrPartial = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 No Upfront - 1 Año
+                if (
+                  reservedKey.includes("4NA7Y494T4") &&
+                  attributes.LeaseContractLength === "1yr" &&
+                  attributes.PurchaseOption === "No Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (
+                      dimension?.description &&
+                      dimension.description.includes("reserved instance applied") &&
+                      dimension?.pricePerUnit?.USD
+                    ) {
+                      hourlyNoUpfront1Yr = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 No Upfront - 3 Años
+                if (
+                  reservedKey.includes("BPH4J8HBKS") &&
+                  attributes.LeaseContractLength === "3yr" &&
+                  attributes.PurchaseOption === "No Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    if (
+                      dimension?.description &&
+                      dimension.description.includes("reserved instance applied") &&
+                      dimension?.pricePerUnit?.USD
+                    ) {
+                      hourlyNoUpfront3Yr = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Resto de lógica
+            const instanceType = attrs.instanceType || "";
+            const os = attrs.operatingSystem || "";
+            const preInstalledSw =
+              (attrs.preInstalledSw || "").trim().toLowerCase() === "na" ? "BYOL" : attrs.preInstalledSw;
+            const concatenar = `${zona}${instanceType}${os}${preInstalledSw}`;
+
+            const vcpu = attrs.vcpu || "0";
+            const memory = attrs.memory || "0";
+            const tenancy = attrs.tenancy || "";
+            const licenseModel = attrs.licenseModel || "";
+            const physicalCores = attrs.physicalCores || "";
+
+            const terms = item.terms?.OnDemand;
+            const termKey = terms ? Object.keys(terms)[0] : null;
+            const priceDimensions = termKey ? terms[termKey]?.priceDimensions : null;
+
+            if (!priceDimensions) continue;
+
+            let descripcionElegida = "";
+            let precioUSD = "0";
+
+            for (const priceKey of Object.keys(priceDimensions)) {
+              const dimension = priceDimensions[priceKey];
+              const descripcion = dimension.description || "";
+
+              if (descripcion.includes("per On Demand") && descripcion.includes("Instance Hour")) {
+                descripcionElegida = descripcion;
+                precioUSD = dimension.pricePerUnit?.USD || "0";
+                break;
+              }
+            }
+
+            const price = parseFloat(precioUSD);
+            const monthprice = `=(${price.toFixed(4)} * 24 * 30)`;
+            const oneyearprice = `=(${price.toFixed(4)} * 24 * 30 * 12)`;
+            const threeyearprice = `=(${price.toFixed(4)} * 24 * 30 * 12 * 3)`;
+
+            if (price > 0) {
+              allRows.push([
+                concatenar,
+                zona,
+                instanceType,
+                vcpu,
+                memory,
+                os,
+                tenancy,
+                preInstalledSw,
+                price.toFixed(4),
+                monthprice,
+                oneyearprice,
+                threeyearprice,
+                upfrontFee1Yr.toFixed(4),
+                upfrontFee3Yr.toFixed(4),
+                upfrontFee1YrConvertible.toFixed(4),
+                upfrontFee3YrConvertible.toFixed(4),
+                upfrontFee1YrPartial.toFixed(4),
+                upfrontFee3YrPartial.toFixed(4),
+                `=${hourlyNoUpfront1Yr.toFixed(4)}*24*30*12`,
+                `=${hourlyNoUpfront3Yr.toFixed(4)}*24*30*12*3` // ✅ Nuevo campo agregado para No Upfront 3Yr
+              ]);
+            }
+          }
+
+          // Limpiar hoja
+          await limpiarCeldas();
+
+          // Insertar datos
+          if (allRows.length > 0) {
+            hoja1.getRange(`A3:T${allRows.length + 2}`).values = allRows;
+           
+            document.getElementById("mensajeAlerta").style.display = "none";
+          } else {
+            // console.log(`No fueron encontrados registros para la región ${zona}`);
+            document.getElementById("mensajeAlerta").style.display = "block";
+            document.getElementById(
+              "mensajeAlerta"
+            ).innerHTML = `No fueron encontrados registros para la región <strong>${zona}</strong> para el sistema operativo <strong>${sistemaoperativo}</strong>`;
+          }
+          
+          
+          //console.log("Familias escritas en Excel:", familias.length);
+
+          // await generarHojasOs(context, pricing, osSelect.value, ubicacionRegion.value);
+        } catch (error) {
+          console.error("[ERROR]:", error);
+        }
+        // Asumimos que tus datos están en la columna I desde la fila 3 hasta la fila N
+        const usedRange = sheet.getUsedRange(); // Para detectar cuántas filas hay
+        usedRange.load("rowCount");
+        await context.sync();
+
+        const lastRow = usedRange.rowCount;
+
+        // Formatear la columna I (columna número 9, ya que comienza en 1)
+        const rangeColumnas = sheet.getRange(`I3:T${lastRow}`);
+
+        rangeColumnas.numberFormat = [["0.00"]]; // Dos decimales
+
+        document.getElementById("spinner").style.display = "none"; // Ocultar spinner
+        await context.sync();
+        // 🔥 Al terminar Excel.run, llamas la otra función:
+        await crearNuevaHojaDesdeSO(preInstalledSoftware.value, zona, sistemaoperativo);
+      });
+    }
+
+
+    let ultimaZonaSeleccionada = null;
+
+    let hojaZonaActual = null;
+
+
+    async function crearNuevaHojaDesdeSO(nombreHoja, zonaActual,
+    sistemaOperativoActual) {
+      await Excel.run(async (context) => {
+        const hojaOrigen = context.workbook.worksheets.getItem("SO");
+        // Si la zona ha cambiado
+        // console.log(`ultimaZonaSeleccionada: ${ultimaZonaSeleccionada} y zona actual ${zonaActual}`);
+        // return;
+        if (!nombreHoja || typeof nombreHoja !== "string") {
+          nombreHoja = "NuevaHoja";
+        }
+
+        nombreHoja = nombreHoja
+          .replace(/[\[\]\*\/\\\?\:]/g, "")
+          .substring(0, 30)
+          .trim();
+        if (nombreHoja === "") {
+          nombreHoja = "NuevaHoja";
+        }
+        //  console.log(`Nombre Hoja: ${nombreHoja}`);
+        // return;
+        let hojaDestino;
+        let hojaExiste = true;
+
+        try {
+          hojaDestino = context.workbook.worksheets.getItem(nombreHoja);
+          hojaDestino.load("name");
+          await context.sync();
+          //console.log(`✅ Hoja '${nombreHoja}' encontrada.`);
+          await imprimirMensajes(`✅ Hoja '${nombreHoja}' encontrada.`);
+        } catch (e) {
+          hojaExiste = false;
+          //console.log(`🆕 Hoja '${nombreHoja}' no existe, se creará.`);
+          await imprimirMensajes(`🆕 Hoja '${nombreHoja}' no existe, se creará.`);
+          hojaDestino = context.workbook.worksheets.add(nombreHoja);
+          await context.sync();
+        }
+
+        if (!hojaExiste || ultimaZonaSeleccionada !== zonaActual) {
+          if (hojaExiste) {
+            let valorZona = hojaDestino.getRange("AA1");
+            valorZona.load("values");
+            await context.sync();
+            ultimaZonaSeleccionada = valorZona.values;
+
+            if (String(ultimaZonaSeleccionada).trim() !== String(zonaActual).trim()) {
+              // Si la zona ha cambiado
+              console.log(`Para aqui va a borrar`);
+              return;
+              hojaDestino.delete();
+              await context.sync();
+              //console.log(`🗑️ Hoja '${nombreHoja}' eliminada por cambio de zona.`);
+              await imprimirMensajes(`🗑️ Hoja '${nombreHoja}' eliminada por cambio de zona.`);
+            }
+          }
+
+          hojaDestino.getRange("AA1").values = [[zonaActual]];
+          await context.sync();
+
+          // Guardamos la nueva hoja actual
+          hojaZonaActual = hojaDestino;
+        } else {
+          // Si no ha cambiado la zona, simplemente buscamos la hoja
+          hojaDestino = context.workbook.worksheets.getItem(nombreHoja);
+        }
+
+        ultimaZonaSeleccionada = zonaActual;
+
+        // Cargamos los datos de la hoja destino
+        const usedRangeDestino = hojaDestino.getUsedRange();
+        usedRangeDestino.load(["values", "rowCount"]);
+        await context.sync();
+
+        // Cargamos los datos de la hoja origen (SO)
+        const usedRangeOrigen = hojaOrigen.getUsedRange();
+        usedRangeOrigen.load(["values", "rowCount", "columnCount"]);
+        await context.sync();
+        //console.log(`Ùsed Range: ${usedRangeOrigen.rowCount}`);
+        //return;
+        if (usedRangeOrigen.rowCount === 0 || usedRangeOrigen.columnCount === 0) {
+          //console.warn("⚠️ Hoja SO vacía, no hay nada que copiar.");
+          await imprimirMensajes("⚠️ Hoja SO vacía, no hay nada que copiar.");
+          return;
+        }
+
+        const valoresDestino = usedRangeDestino.values;
+
+        // Buscar si el sistema operativo ya fue agregado en columna AB
+        const sistemasYaInsertados = valoresDestino
+          .map((row) => row[27]) // AB = columna 27
+          .filter((v) => typeof v === "string" && v.trim() !== "");
+
+        if (sistemasYaInsertados.includes(sistemaOperativoActual)) {
+          //console.log(`⚠️ El sistema operativo '${sistemaOperativoActual}' ya fue registrado. No se copia de nuevo.`);
+          await imprimirMensajes(
+            `⚠️ El sistema operativo '${sistemaOperativoActual}' ya fue registrado. No se copia de nuevo.`
+          );
+          return;
+        }
+
+        // Buscar última fila disponible
+        let filaPegado = usedRangeDestino.rowCount;
+        if (filaPegado < 1) filaPegado = 1; // Siempre mínimo 1 fila
+
+        //console.log(`📋 Pegando en fila ${filaPegado + 1} para SO: ${sistemaOperativoActual}`);
+        await imprimirMensajes(`📋 Pegando en fila ${filaPegado + 1} para SO: ${sistemaOperativoActual}`);
+
+        /***************Verificar si se levantó el SO*************** */
+        // 🔍 Verificar si el sistema operativo ya fue levantado en la hoja de destino
+        const columnaSistemas = hojaDestino.getRange("AB1:AB4");
+        columnaSistemas.load("values");
+        await context.sync();
+
+        // Convertir en lista plana
+        const sistemasYaPegados = columnaSistemas.values
+          .flat()
+          .filter((nombre) => typeof nombre === "string" && nombre.trim() !== "");
+
+        if (sistemasYaPegados.includes(sistemaOperativoActual)) {
+          //console.log(`⚠️ Ya se levantó el sistema operativo: ${sistemaOperativoActual}`);
+          await imprimirMensajes(`⚠️ Ya se levantó el sistema operativo: ${sistemaOperativoActual}`);
+          return; // No continuar
+        }
+
+        // Si no está, buscar la próxima fila vacía
+        const fila = sistemasYaPegados.length + 1;
+        hojaDestino.getRange(`AB${fila}`).values = [[sistemaOperativoActual]];
+        await context.sync();
+
+        /***************Fin si se levantó el SO******************** */
+
+        // 🔍 Determinar si estamos en la primera pegada (filaPegado === 0)
+        let valoresParaPegar;
+
+        if (filaPegado === 0 || filaPegado === 1) {
+          // Primer bloque: incluye encabezado
+          valoresParaPegar = usedRangeOrigen.values;
+        } else {
+          // Bloques posteriores: omitir encabezado (primera fila)
+          valoresParaPegar = usedRangeOrigen.values.slice(2);
+        }
+
+        // 🔢 Cantidad de filas a pegar
+        const filasParaPegar = valoresParaPegar.length;
+        if (filasParaPegar != 0) {
+          // 📌 Pegar los datos en la hoja destino
+          hojaDestino.getRangeByIndexes(
+            filaPegado,
+            0, // columna A
+            filasParaPegar,
+            usedRangeOrigen.columnCount
+          ).values = valoresParaPegar;
+
+          const usedRange = hojaDestino.getUsedRange(); // Para detectar cuántas filas hay
+          usedRange.load("rowCount");
+          await context.sync();
+
+          const lastRow = usedRange.rowCount;
+          // Formatear la columna I (columna número 9, ya que comienza en 1)
+          const rangeColumnas = hojaDestino.getRange(`I3:T${lastRow}`);
+
+          rangeColumnas.numberFormat = [["0.00"]]; // Dos decimales
+          await colorCelda(hojaDestino, "A2", "#000000", "white");
+          await colorCelda(hojaDestino, "B2", "#000000", "white");
+          await colorCelda(hojaDestino, "C2", "#000000", "white");
+          await colorCelda(hojaDestino, "D2", "#000000", "white");
+          await colorCelda(hojaDestino, "E2", "#000000", "white");
+          await colorCelda(hojaDestino, "F2", "#000000", "white");
+          await colorCelda(hojaDestino, "G2", "#000000", "white");
+          await colorCelda(hojaDestino, "H2", "#000000", "white");
+          await colorCelda(hojaDestino, "A3", "#000000", "white");
+          await colorCelda(hojaDestino, "B3", "#000000", "white");
+          await colorCelda(hojaDestino, "C3", "#000000", "white");
+          await colorCelda(hojaDestino, "D3", "#000000", "white");
+          await colorCelda(hojaDestino, "E3", "#000000", "white");
+          await colorCelda(hojaDestino, "F3", "#000000", "white");
+          await colorCelda(hojaDestino, "G3", "#000000", "white");
+          await colorCelda(hojaDestino, "H3", "#000000", "white");
+          await colorCelda(hojaDestino, "I2:L2", "#002060", "white");
+          await colorCelda(hojaDestino, "M2:N2", "#4c216d", "white");
+          await colorCelda(hojaDestino, "O2:P2", "#b1510f", "white");
+          await colorCelda(hojaDestino, "Q2:R2", "#960000", "white");
+          await colorCelda(hojaDestino, "S2:T2", "#002060", "white");
+          await colorCelda(hojaDestino, "I3", "#0070c0", "white");
+          await colorCelda(hojaDestino, "J3", "#0070c0", "white");
+          await colorCelda(hojaDestino, "K3", "#0070c0", "white");
+          await colorCelda(hojaDestino, "L3", "#0070c0", "white");
+          await colorCelda(hojaDestino, "M3", "#7030a0", "white");
+          await colorCelda(hojaDestino, "N3", "#7030a0", "white");
+          await colorCelda(hojaDestino, "O3", "#ff8500", "white");
+          await colorCelda(hojaDestino, "P3", "#ff8500", "white");
+          await colorCelda(hojaDestino, "Q3", "#ff0000", "white");
+          await colorCelda(hojaDestino, "R3", "#ff0000", "white");
+          await colorCelda(hojaDestino, "S3", "#4472c4", "white");
+          await colorCelda(hojaDestino, "T3", "#4472c4", "white");
+          hojaDestino.getRange("J3").values = [["Monthly OnDmd"]];
+          hojaDestino.getRange("K3").values = [["1Yr OnDmd"]];
+          hojaDestino.getRange("L3").values = [["3Yr OnDmd"]];
+          hojaDestino.getRange("M3").values = [["1Yr Std AURI"]];
+          hojaDestino.getRange("N3").values = [["3Yr Std AURI"]];
+          hojaDestino.getRange("O3").values = [["1Yr Cnvt AURI"]];
+          hojaDestino.getRange("P3").values = [["3Yr Cnvt AURI"]];
+          hojaDestino.getRange("Q3").values = [["1Yr Std PURI Ttl"]];
+          hojaDestino.getRange("R3").values = [["3Yr Std PURI Ttl"]];
+          hojaDestino.getRange("S3").values = [["1Yr Std NURI Ttl"]];
+          hojaDestino.getRange("T3").values = [["3Yr Std NURI Ttl"]];
+          await context.sync();
+        } else {
+          //console.log(`No hay registros que pegar para ese sistema operativo`);
+          await imprimirMensajes(`❌ No hay registros que pegar para ese sistema operativo`);
+        }
+
+        await context.sync();
+
+        //console.log(`✅ Data del sistema operativo '${sistemaOperativoActual}' copiada exitosamente.`);
+        await imprimirMensajes(`✅ Data del sistema operativo '${sistemaOperativoActual}' copiada exitosamente.`);
+      });
+    }
+
+
+    async function limpiarCeldas() {
+      await Excel.run(async (context) => {
+        const hojaSO = context.workbook.worksheets.getItem("SO");
+
+        const startRow = 3;
+
+        // Detectar el rango usado
+        const usedRange = hojaSO.getUsedRange();
+        usedRange.load("rowCount");
+        await context.sync();
+
+        const lastRow = usedRange.rowCount;
+
+        if (lastRow > 0) {
+          const clearRange = hojaSO.getRange(`A${startRow}:T${startRow + lastRow}`);
+          clearRange.clear();
+        }
+      });
+    }
+
+    /******************************************
+     * SCRIPTS ALOJAMIENTOS DEDICADOS
+     ******************************************/
+    const toggleButton = document.getElementById("toggleButton");
+
+    let estadoDedicado = true;
+
+    let botondedicados = document.getElementById("seccionPreinstalled");
+
+
+    toggleButton.addEventListener("click", () => {
+      estadoDedicado = !estadoDedicado;
+
+      if (estadoDedicado) {
+        toggleButton.classList.remove("btn-secondary");
+        toggleButton.classList.add("btn-outline-secondary");
+        toggleButton.textContent = "Alojamientos Dedicados";
+        botondedicados.style.display = "block";
+        titulo.innerHTML = "Instancias Compartidas";
+      } else {
+        toggleButton.classList.remove("btn-outline-secondary");
+        toggleButton.classList.add("btn-secondary");
+        toggleButton.textContent = "Instancias Compartidas";
+        titulo.innerHTML = "Alojamientos Dedicados";
+        botondedicados.style.display = "none";
+      }
+    });
+
+
+    async function colorCelda(hoja, rango, colorFondo, colorFuente) {
+      const colorrango = hoja.getRange(rango);
+      colorrango.merge(); // Combina las celdas de G1 a J1
+      colorrango.format.fill.color = colorFondo;
+      colorrango.format.font.color = colorFuente; // Texto blanco
+      colorrango.format.font.bold = true; // Negrita
+      colorrango.format.horizontalAlignment = "Center"; // Centrado horizontal
+      colorrango.format.verticalAlignment = "Center"; // Centrado vertical
+    }
+
+
+    async function cargarInstanciasDedicadas(ubicacionRegion, osSelect) {
+      await Excel.run(async (context) => {
+        try {
+          const workbook = context.workbook;
+          const sheets = workbook.worksheets;
+
+          // Verifica si la hoja 'credenciales' ya existe
+          let credSheet;
+          let sheetExists = false;
+
+          sheets.load("items/name");
+
+          await context.sync();
+
+          for (let i = 0; i < sheets.items.length; i++) {
+            if (sheets.items[i].name === "Dedicadas") {
+              sheetExists = true;
+              credSheet = sheets.items[i];
+              break;
+            }
+          }
+
+          if (!sheetExists) {
+            credSheet = sheets.add("Dedicadas");
+          } else {
+            const hoja = sheets.getItem("Dedicadas");
+            hoja.load("name");
+            await context.sync();
+
+            hoja.delete();
+            credSheet = sheets.add("Dedicadas");
+          }
+          const aws = new AwsInitializer();
+          await aws.init();
+          let sistemaoperativo = osSelect.value;
+          const pricing = new AWS.Pricing();
+          let soDedicados = "";
+          switch (osSelect.value) {
+            case "Linux":
+              soDedicados = "Linux";
+              break;
+            case "Windows":
+              soDedicados = "windows";
+              break;
+          }
+
+          const params = {
+            ServiceCode: "AmazonEC2",
+            Filters: [
+              { Type: "TERM_MATCH", Field: "serviceCode", Value: "AmazonEC2" },
+              { Type: "TERM_MATCH", Field: "location", Value: ubicacionRegion.value },
+              { Type: "TERM_MATCH", Field: "operatingSystem", Value: "Linux" },
+              { Type: "TERM_MATCH", Field: "productFamily", Value: "Dedicated Host" }
+            ],
+            MaxResults: 100
+          };
+
+          try {
+            let allProducts = [];
+            let nextToken;
+            credSheet.getRange("G1").values = "OnDemand Pricing";
+            credSheet.getRange("K1").values = "1Yr/3Yr STD AURI";
+            credSheet.getRange("M1").values = "1Yr/3Yr STD PURI";
+            credSheet.getRange("O1").values = "1Yr/3Yr STD NURI";
+            await colorCelda(credSheet, "G1:J1", "#002060", "white");
+            await colorCelda(credSheet, "K1:L1", "#4c216d", "white");
+            await colorCelda(credSheet, "M1:N1", "#960000", "white");
+            await colorCelda(credSheet, "O1:P1", "#002060", "white");
+            await colorCelda(credSheet, "A1:F1", "#000000", "white");
+            await colorCelda(credSheet, "A2", "#000000", "white");
+            await colorCelda(credSheet, "B2", "#000000", "white");
+            await colorCelda(credSheet, "C2", "#000000", "white");
+            await colorCelda(credSheet, "D2", "#000000", "white");
+            await colorCelda(credSheet, "E2", "#000000", "white");
+            await colorCelda(credSheet, "F2", "#000000", "white");
+            await colorCelda(credSheet, "G2", "#0070c0", "white");
+            await colorCelda(credSheet, "H2", "#0070c0", "white");
+            await colorCelda(credSheet, "I2", "#0070c0", "white");
+            await colorCelda(credSheet, "J2", "#0070c0", "white");
+            await colorCelda(credSheet, "K2", "#7030a0", "white");
+            await colorCelda(credSheet, "L2", "#7030a0", "white");
+            await colorCelda(credSheet, "M2", "#ff0000", "white");
+            await colorCelda(credSheet, "N2", "#ff0000", "white");
+            await colorCelda(credSheet, "O2", "#4472c4", "white");
+            await colorCelda(credSheet, "P2", "#4472c4", "white");
+
+            // Obtener todos los productos
+            do {
+              if (nextToken) {
+                params.NextToken = nextToken;
+              }
+
+              const data = await pricing.getProducts(params).promise();
+              allProducts = allProducts.concat(data.PriceList);
+              nextToken = data.NextToken;
+            } while (nextToken);
+           // console.log(`todoslosproductos: ${JSON.stringify(allProducts,null,2)}`);
+            // return;
+            const instanceMap = {};
+
+            // Procesar cada producto
+            allProducts.forEach((item) => {
+              const attrs = item.product.attributes;
+              const instanceType = (attrs.instanceType || "").toLowerCase();
+
+              if (!instanceMap[instanceType]) {
+                instanceMap[instanceType] = {
+                  //instanceFamily: attrs.instanceFamily || "",
+                  location: attrs.location || "",
+                  sistemaoper: attrs.operatingSystem || "",
+                  //vcpu: attrs.vcpu || "0",
+                  //physicalCores: attrs.physicalCores || "",
+                  tenanc: attrs.tenancy,
+                  slqlicmodel: attrs.licenseModel,
+                  onDemandPrice: 0,
+                  upfrontPartial1Yr: 0,
+                  upfrontPartial3Yr: 0,
+                  upfrontAll1Yr: 0,
+                  upfrontAll3Yr: 0,
+                  noUpfront1Yr: 0,
+                  noUpfront3Yr: 0
+                };
+              }
+
+              // OnDemand
+              const onDemandTerms = item.terms?.OnDemand;
+              if (onDemandTerms) {
+                const odTermKey = Object.keys(onDemandTerms)[0];
+                const odPriceDimensions = onDemandTerms[odTermKey]?.priceDimensions;
+                if (odPriceDimensions) {
+                  const odPriceKey = Object.keys(odPriceDimensions)[0];
+                  const odPrice = odPriceDimensions[odPriceKey]?.pricePerUnit?.USD || "0";
+                  if (parseFloat(odPrice) > 0) {
+                    instanceMap[instanceType].onDemandPrice = parseFloat(odPrice);
+                  }
+                }
+              }
+
+              // Reserved
+              const reservedInstances = item.terms?.Reserved;
+              if (!reservedInstances) return;
+
+              for (const reservedKey in reservedInstances) {
+                const term = reservedInstances[reservedKey];
+                const termAttributes = term.termAttributes || {};
+                const leaseContractLength = termAttributes.LeaseContractLength || "";
+                const purchaseOption = termAttributes.PurchaseOption || "";
+                const dimensions = term.priceDimensions || {};
+
+                for (const reservedKey in reservedInstances) {
+                  const term = reservedInstances[reservedKey];
+                  const termAttributes = term.termAttributes || {};
+                  const leaseContractLength = termAttributes.LeaseContractLength || "";
+                  const purchaseOption = (termAttributes.PurchaseOption || "").replace(/\s+/g, ""); // ← quitar espacios
+                  const dimensions = term.priceDimensions || {};
+
+                  for (const dimKey in dimensions) {
+                    const dimension = dimensions[dimKey];
+                    // console.log(`dimension: ${JSON.stringify(dimension,null,2)}`);
+                    const description = dimension.description || "";
+                    const rateCode = dimension.rateCode || "";
+                    const usdPrice = dimension?.pricePerUnit?.USD || "0.00";
+                    if (rateCode.includes("AHT2P9WVDP.2TG2D8R56U")) {
+                      instanceMap[instanceType].upfrontAll1Yr = parseFloat(usdPrice);
+                      //   console.log(`Instancia: ${instanceType}, Precio: ${parseFloat(usdPrice)}`);
+                    }
+                    if (rateCode.includes("DXEJ4EGHUJ.2TG2D8R56U")) {
+                      instanceMap[instanceType].upfrontAll1Yr = parseFloat(usdPrice);
+                      //   console.log(`Instancia: ${instanceType}, Precio: ${parseFloat(usdPrice)}`);
+                    }
+                    if (rateCode.includes("YKSHTEAGQM.2TG2D8R56U")) {
+                      //  console.log(`Instancia: ${instanceType}, Precio: ${usdPrice}`);
+                      instanceMap[instanceType].upfrontPartial1Yr = parseFloat(usdPrice);
+                    }
+                    if (rateCode.includes("3RJ4P9STGK.2TG2D8R56U")) {
+                 
+                      instanceMap[instanceType].upfrontPartial3Yr = parseFloat(usdPrice);
+                    }
+                    if (rateCode.includes("CPPW92X9U4.2TG2D8R56U")) {
+                      instanceMap[instanceType].upfrontAll3Yr = parseFloat(usdPrice);
+                  
+                    }
+                    if (leaseContractLength === "1yr" && purchaseOption === "PartialUpfront") {
+                      if (description === "Upfront Fee" || rateCode.includes("YKSHTEAGQM.2TG2D8R56U")) {
+                        instanceMap[instanceType].upfrontPartial1Yr = parseFloat(usdPrice);
+                       
+                      }
+                    }
+                   
+                    if (dimension ?.description === "Upfront Fee" && dimension ?.pricePerUnit ?.USD) {
+                    if (rateCode.includes("R6AKCSNU9E")) {
+                      instanceMap[instanceType].upfrontPartial3Yr = parseFloat(usdPrice);
+                    }
+                    }
+                    if (leaseContractLength === "1yr" && purchaseOption === "AllUpfront") {
+                      if (description === "Upfront Fee" || rateCode.includes("AHT2P9WVDP.2TG2D8R56U")) {
+                        instanceMap[instanceType].upfrontAll1Yr = parseFloat(usdPrice);
+                      }
+                    }
+                    if (leaseContractLength === "3yr" && purchaseOption === "AllUpfront") {
+                      if (description === "Upfront Fee" || rateCode.includes("A5N8VPGMRK.2TG2D8R56U")) {
+                        instanceMap[instanceType].upfrontAll3Yr = parseFloat(usdPrice);
+                      }
+                    }
+
+                    // No Upfront 1Yr
+                    if (leaseContractLength === "1yr" && purchaseOption === "NoUpfront") {
+                      if (
+                        reservedKey.includes("AHT2P9WVDP") &&
+                        dimension?.description?.endsWith("Dedicated Host Reservation hours used this month") &&
+                        dimension?.pricePerUnit?.USD
+                      ) {
+                        instanceMap[instanceType].noUpfront1Yr = parseFloat(dimension.pricePerUnit.USD);
+                      }
+                    }
+                    // No Upfront 3Yr
+                    if (leaseContractLength === "3yr" && purchaseOption === "NoUpfront") {
+                      if (
+                        reservedKey.includes("A5N8VPGMRK") &&
+                        dimension?.description?.endsWith("Dedicated Host Reservation hours used this month") &&
+                        dimension?.pricePerUnit?.USD
+                      ) {
+                        instanceMap[instanceType].noUpfront3Yr = parseFloat(dimension.pricePerUnit.USD);
+                      }
+                    }
+                  }
+                }
+              }
+            });
+
+            // Exportar a la hoja de Excel
+            credSheet.getRange("A2:P2").values = [
+              [
+                "&&",
+                "Location",
+                "Instance Type",
+                "OS",
+                "Tenancy",
+                "SQL Lic Model",
+                //"vCPU",
+                //"Physical Cores",
+                "Hourly OnDmd",
+                "Monthly OnDmd",
+                "1Yr OnDmd",
+                "3Yr OnDmd",
+                "1Yr Std AURI",
+                "3Yr Std AURI",
+                "1Yr Std PURI Ttl",
+                "3Yr Std PURI Ttl",
+                "1Yr Std NURI Ttl",
+                "3Yr Std NURI Ttl"
+              ]
+            ];
+
+            let row = 2;
+
+            for (const [instanceType, data] of Object.entries(instanceMap)) {
+              credSheet.getRange(`A${row + 1}:P${row + 1}`).values = [
+                [
+                  data.location + instanceType,
+                  data.location,
+                  instanceType,
+                  data.sistemaoper,
+                  data.tenanc,
+                  data.slqlicmodel,
+                  //data.instanceFamily,
+                  //data.vcpu,
+                  //data.physicalCores,
+                  data.onDemandPrice.toFixed(3),
+                  `=${data.onDemandPrice.toFixed(3)}*24*30`,
+                  `=${data.onDemandPrice.toFixed(3)}*24*30*12`,
+                  `=(${data.onDemandPrice.toFixed(3)}*24*30*12)*3`,
+                  data.upfrontAll1Yr.toFixed(3),
+                  data.upfrontAll3Yr.toFixed(3),
+                  data.upfrontPartial1Yr.toFixed(3),
+                  data.upfrontPartial3Yr.toFixed(3),
+                  data.noUpfront1Yr.toFixed(3),
+                  data.noUpfront3Yr.toFixed(3)
+                ]
+              ];
+              row++;
+            }
+
+            const usedRange = credSheet.getUsedRange(); // Para detectar cuántas filas hay
+            usedRange.load("rowCount");
+            await context.sync();
+
+            const lastRow = usedRange.rowCount;
+            // Formatear la columna I (columna número 9, ya que comienza en 1)
+            const rangeColumnas = credSheet.getRange(`G3:P${lastRow}`);
+
+            rangeColumnas.numberFormat = [["0.00"]]; // Dos decimales
+          } catch (error) {
+            console.error("Error al obtener los precios:", error);
+          }
+        } catch (error) {
+          console.log(`ERROR: ${error}`);
+        }
+      });
+    }
+
+    /******************************************
+     * FIN SCRIPTS ALOJAMIENTOS DEDICADOS
+     ******************************************/
+    /** Cargar AWS SDK desde la CDN de AWS */
+
+
+    async function loadAwsSdk() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://sdk.amazonaws.com/js/aws-sdk-2.1080.0.min.js"; // Versión más estable
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("No se pudo cargar AWS SDK"));
+        document.head.appendChild(script);
+      });
+    }
+
+
+    /** Default helper for invoking an action and handling errors. */
+
+
+    async function tryCatch(callback) {
+      try {
+        await callback();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    class AwsInitializer {
+      constructor() {
+        this.sdkLoaded = false;
+        this.sdkURL = "https://sdk.amazonaws.com/js/aws-sdk-2.1080.0.min.js";
+        this.region = "us-east-1";
+        this.accessKeyId = "";
+        this.secretAccessKey = "";
+      }
+
+      async cargarCredencialesDesdeExcel() {
+        return Excel.run(async (context) => {
+          const sheets = context.workbook.worksheets;
+          sheets.load("items/name");
+          await context.sync();
+
+          const sheet = sheets.items.find((s) => s.name === "credenciales");
+          if (!sheet) {
+            throw new Error("❌ La hoja 'credenciales' no existe.");
+          }
+
+          sheet.load("visibility");
+          await context.sync();
+
+          if (sheet.visibility === Excel.SheetVisibility.hidden) {
+            sheet.visibility = Excel.SheetVisibility.visible;
+          }
+
+          try {
+            await sheet.protection.unprotect();
+          } catch (e) {
+            console.warn("La hoja no estaba protegida.");
+          }
+
+          const claveRange = sheet.getRange("A1");
+          const secretoRange = sheet.getRange("A2");
+          claveRange.load("values");
+          secretoRange.load("values");
+          await context.sync();
+
+          this.accessKeyId = claveRange.values[0][0] || "";
+          this.secretAccessKey = secretoRange.values[0][0] || "";
+
+          await sheet.protection.protect();
+          sheet.visibility = Excel.SheetVisibility.hidden;
+          await context.sync();
+        });
+      }
+
+      async init() {
+        try {
+          await this.cargarCredencialesDesdeExcel();
+
+          if (!this.sdkLoaded) {
+            await this.loadAwsSdk();
+            this.sdkLoaded = true;
+          }
+
+          AWS.config.update({
+            accessKeyId: this.accessKeyId,
+            secretAccessKey: this.secretAccessKey,
+            region: this.region
+          });
+
+          //console.log("✅ AWS SDK cargado y credenciales configuradas");
+        } catch (error) {
+          console.error("Error al inicializar AWS:", error.message);
+        }
+      }
+
+      async loadAwsSdk() {
+        return new Promise((resolve, reject) => {
+          if (document.querySelector(`script[src="${this.sdkURL}"]`)) {
+            resolve(); // Ya cargado
+            return;
+          }
+
+          const script = document.createElement("script");
+          script.src = this.sdkURL;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+    }
+  language: typescript
+template:
+  content: "<div><span class=\"badge text-bg-dark\" id=\"pintaMensaje\">Versión 1.0</span></div>\n<div class=\"logo\"></div>\n<div id=\"spinner\" style=\"display: none;\">\n\t<button class=\"btn btn-success\" type=\"button\" disabled>\n    <span class=\"spinner-border spinner-border-sm\" aria-hidden=\"true\"></span>\n    <span role=\"status\">Calculando Precios...</span>\n  </button>\n</div>\n<h2 class=\"text-center\" id=\"titulo\">Instancias Compartidas</h2>\n\n<i class=\"fa-solid fa-earth-americas\" style=\"color: #3d85c6;\"></i>\n<strong style=\"margin-left:19px;\">Regiones</strong><select id=\"selectUbicaciones\" class=\"ms-Dropdown\" style=\"margin-left:20px;\">\n</select>\n<div style=\"display: flex; align-items: center; gap: 20px;\">\n\t<i class=\"fa-solid fa-server\"></i> <strong>Sistema Operativo</strong>\n\t<select id=\"osSelect\" class=\"ms-Dropdown\" style=\"width: 200px;\">\n\t    <option value=\"Linux\">Linux <i class=\"fa-brands fa-linux\" style=\"color: green;\"></i></option>\n\t    <option value=\"Windows\">Windows <i class=\"fa-brands fa-windows\" style=\"color: #0078D4;\"></i></option>\n\t    <option value=\"RHEL\">Red Hat <i class=\"fa-brands fa-redhat\" style=\"color: #E00;\"></i></option>\n\t    <option value=\"Suse\">SUSE <i class=\"fa-brands fa-suse\" style=\"color: #76B900;\"></i></option>\n\t\t\t<option value=\"Todos\">Todos <i class=\"fa-solid fa-asterisk\"></i></option>\n\t  </select>\n\n\t<i id=\"osIcon\" class=\"fa-brands fa-linux\" style=\"font-size: 50px; color: #0078D4; width: 70px;height: 70px; border-radius: 50%;display: flex;\"></i>\n</div>\n<div style=\"margin-top: 12px;gap: 20px;\" id=\"seccionPreinstalled\">\n\t<i class=\"fa-solid fa-database\" style=\"color:#16537e;\"></i> <strong>Pre-Installed Software</strong> <select id=\"preInstalledSw\" class=\"ms-Dropdown\" style=\"margin-left:18px;\">\n\t        <option value=\"na\">NA (BYOL)</option>\n\t        <option value=\"SQL Web\">SQL WEB</option>\n\t        <option value=\"SQL Std\">SQL STD</option>\n\t        <option value=\"SQL Ent\">SQL ENT</option>\n\t      </select>\n</div>\n<!-- Contenedor con botones alineados horizontalmente -->\n<div class=\"d-flex align-items-center gap-4 mt-2\">\n\t<!-- Botón cargar instancias -->\n\t<button id=\"cargarInstancias\" class=\"btn btn-primary d-flex align-items-center gap-2\">\n    <i class=\"fa-solid fa-upload\" style=\"color:#073763;\"></i> Cargar instancias\n  </button>\n\n\t<!--\n\t<button type=\"button\" class=\"btn btn-success\" id=\"consolidar\">\n\t\t<i class=\"fa-solid fa-file-excel\"></i>\n    Consolidar Hoja\n  </button>\n\t-->\n\t<!-- Botón para abrir modal -->\n\t<button id=\"toggleButton\" class=\"btn btn-outline-secondary\">Alojamientos Dedicados</button>\n\n\t<!--CREDENCIALES-->\n\n\t<button class=\"btn btn-dark\" id=\"credenciales\" type=\"button\" data-bs-toggle=\"offcanvas\" data-bs-target=\"#offcanvasRight\" aria-controls=\"offcanvasRight\"><i class=\"fa-solid fa-key\" style=\"color:gray;\"></i> Credenciales</button>\n\n\t<div class=\"offcanvas offcanvas-end\" tabindex=\"-1\" id=\"offcanvasRight\" aria-labelledby=\"offcanvasRightLabel\">\n\t\t<div class=\"logo\"></div>\n\t\t<div class=\"offcanvas-header\">\n\t\t\t<h5 class=\"offcanvas-title\" id=\"offcanvasRightLabel\">CREDENCIALES</h5>\n\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"offcanvas\" aria-label=\"Close\"></button>\n\t\t</div>\n\t\t<div class=\"offcanvas-body\">\n\t\t\t<div class=\"row justify-content-center\">\n\t\t\t\t<div class=\"col-12 col-md-8\">\n\t\t\t\t\t<label class=\"d-block text-center mb-1\">Coloque su clave</label>\n\t\t\t\t\t<input type=\"password\" class=\"form-control mb-3\" id=\"claveAWS\" placeholder=\"Clave AWS\" data-bs-toggle=\"tooltip\" data-bs-placement=\"left\"\n\t\t\t\t\t\tdata-bs-custom-class=\"custom-tooltip\"\n\t\t\t\t\t\tdata-bs-title=\"Coloque la clave proporcionada por AWS.\">\n\t\t\t\t\t<label class=\"d-block text-center mb-1\">Coloque su secreto</label>\n\t\t\t\t\t<input type=\"password\" class=\"form-control\" id=\"secretoAWS\" placeholder=\"Secreto AWS\" data-bs-toggle=\"tooltip\" data-bs-placement=\"left\"\n\t\t\t\t\t\tdata-bs-custom-class=\"custom-tooltip\"\n\t\t\t\t\t\tdata-bs-title=\"Coloque el secreto proporcionado por AWS.\">\n\t        </div>\n\t\t\t\t\t<div class=\"d-flex justify-content-center\">\n\t\t\t\t\t\t<div>\n\t\t\t\t\t\t\t<button class=\"btn btn-dark mt-3\" id=\"guardarAWS\" type=\"button\">Guardar Credenciales</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t\t<!--FIN BOTON CREDENCIALES-->\n\t</div>\n\n\t<!-- Modal de Confirmación -->\n\t<div class=\"modal fade\" id=\"confirmModal\" tabindex=\"-1\" aria-labelledby=\"confirmModalLabel\" aria-hidden=\"true\">\n\t\t<div class=\"modal-dialog modal-dialog-centered\">\n\t\t\t<div class=\"modal-content\">\n\t\t\t\t<div class=\"modal-header\">\n\t\t\t\t\t<h5 class=\"modal-title\" id=\"confirmModalLabel\"></i></h5>\n<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Cerrar\"></button>\n</div>\n<div class=\"modal-body\" id=\"confirmModalBody\">\n\n</div>\n<div class=\"modal-footer\">\n\t<button type=\"button\" class=\"btn btn-danger\" data-bs-dismiss=\"modal\">No <i class=\"fa-solid fa-circle-xmark\" style=\"color:white;\"></i></button>\n\t<button type=\"button\" class=\"btn btn-success\" id=\"confirmYes\">Sí <i class=\"fa-solid fa-circle-check\" style=\"color:white;\"></i></button>\n</div>\n</div>\n</div>\n</div>\n</div>\n\n<br>\n<div class=\"modal fade\" id=\"autoCierreModal\" tabindex=\"-1\" aria-labelledby=\"autoCierreModalLabel\" aria-hidden=\"true\">\n\t<div class=\"modal-dialog\">\n\t\t<div class=\"modal-content\">\n\t\t\t<div class=\"modal-header\">\n\t\t\t\t<h5 class=\"modal-title\" id=\"autoCierreModalLabel\">Mensaje Importante</h5>\n\t\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Close\"></button>\n\t\t\t</div>\n\t\t\t<div class=\"modal-body\" id=\"modal-body\">\n\t\t\t\tPor favor seleccione una ubicación\n\t\t\t</div>\n\t\t\t<div class=\"modal-footer\">\n\t\t\t\t<button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Cerrar</button>\n\t\t\t</div>\n\t\t</div>\n\t</div>\n</div>\n<br>\n<div class=\"alert alert-danger\" style=\"display:none;\" role=\"alert\" id=\"mensajeAlerta\">\n\n</div>"
+  language: html
+style:
+  content: |
+    body{
+      font-size: 14px;
+    }
+    section.samples {
+        margin-top: 20px;
+    }
+
+    section.samples .ms-Button, section.setup .ms-Button {
+        display: block;
+        margin-bottom: 5px;
+        margin-left: 20px;
+        min-width: 80px;
+    }
+
+    /* HTML: <div class="loader"></div> */
+    .loader {
+      width: fit-content;
+      font-weight: bold;
+      font-family: monospace;
+      font-size: 30px;
+      background: radial-gradient(circle closest-side,#000 94%,#0000) right/calc(200% - 1em) 100%;
+      animation: l24 1s infinite alternate linear;
+    }
+    .loader::before {
+      content: "Calculando Precios...";
+      line-height: 1em;
+      color: #0000;
+      background: inherit;
+      background-image: radial-gradient(circle closest-side,#fff 94%,#000);
+      -webkit-background-clip:text;
+              background-clip:text;
+    }
+
+    @keyframes l24{
+      100%{background-position: left}
+    }
+     #spinner {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+      }
+      select,
+      ::picker(select){
+        appearance: base-select;
+        border-radius: 2px;
+      }
+      select{
+        background-color: white;
+        transition: background-color 0.3s ease;
+       
+      }
+      select:hover{
+        background-color: lightblue;
+      }
+      select::picker-icon{
+        transition: 0.2s transform;
+        margin-right: 10px;
+      }
+      select:open::picker-icon{
+        color:gray;
+        transform: rotate(180deg);
+      }
+      ::picker(select){
+        background-color:lightcyan ;
+        color: rgb(59, 62, 65);
+        border: none;
+        border-radius: 4px;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+      }
+      select option{
+        padding: 5px;
+      }
+      select option::checkmark{
+        color:crimson;
+        order: 1;
+        content: "✔️";
+        margin-left: 60px;
+      }
+      #credenciales{
+        margin-left: auto;
+      }
+      .logo {
+        margin-top: 0;
+      width: 130px;
+      height: 130px;
+        background-image: url('data:image/jpeg;base64,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YWRvYmUuY29tL3hhcC8xLjAvADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDQuNC4wLUV4aXYyIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0RXZ0PSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VFdmVudCMiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6R0lNUD0iaHR0cDovL3d3dy5naW1wLm9yZy94bXAvIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOkRvY3VtZW50SUQ9ImdpbXA6ZG9jaWQ6Z2ltcDowZTBhMzQ1OC01YjA0LTQ5OGYtYjc5My02Y2NmNmJjNDM2MzYiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6ZDUxZGI5NWQtMDU5OC00MGY1LWE0NTktZDUxNmUzYjE4ZjhmIiB4bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ9InhtcC5kaWQ6NGM4YTU4MzktNzU3Mi00ZmUwLTg5NzMtNWM1YzZkNDY1MDUxIiBkYzpGb3JtYXQ9ImltYWdlL2pwZWciIEdJTVA6QVBJPSIyLjAiIEdJTVA6UGxhdGZvcm09IldpbmRvd3MiIEdJTVA6VGltZVN0YW1wPSIxNjM3NjkxMDI5OTk5MTQ0IiBHSU1QOlZlcnNpb249IjIuMTAuMjgiIHhtcDpDcmVhdG9yVG9vbD0iR0lNUCAyLjEwIj4gPHhtcE1NOkhpc3Rvcnk+IDxyZGY6U2VxPiA8cmRmOmxpIHN0RXZ0OmFjdGlvbj0ic2F2ZWQiIHN0RXZ0OmNoYW5nZWQ9Ii8iIHN0RXZ0Omluc3RhbmNlSUQ9InhtcC5paWQ6MTAwNjg4OTAtNzgxZi00M2MzLWI0MWQtNzFiODNlZmQ5NGI2IiBzdEV2dDpzb2Z0d2FyZUFnZW50PSJHaW1wIDIuMTAgKFdpbmRvd3MpIiBzdEV2dDp3aGVuPSIyMDIxLTExLTIzVDE0OjEwOjI5Ii8+IDwvcmRmOlNlcT4gPC94bXBNTTpIaXN0b3J5PiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8P3hwYWNrZXQgZW5kPSJ3Ij8+/+ICsElDQ19QUk9GSUxFAAEBAAACoGxjbXMEMAAAbW50clJHQiBYWVogB+UACwAXABIACgAFYWNzcE1TRlQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1sY21zAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANZGVzYwAAASAAAABAY3BydAAAAWAAAAA2d3RwdAAAAZgAAAAUY2hhZAAAAawAAAAsclhZWgAAAdgAAAAUYlhZWgAAAewAAAAUZ1hZWgAAAgAAAAAUclRSQwAAAhQAAAAgZ1RSQwAAAhQAAAAgYlRSQwAAAhQAAAAgY2hybQAAAjQAAAAkZG1uZAAAAlgAAAAkZG1kZAAAAnwAAAAkbWx1YwAAAAAAAAABAAAADGVuVVMAAAAkAAAAHABHAEkATQBQACAAYgB1AGkAbAB0AC0AaQBuACAAcwBSAEcAQm1sdWMAAAAAAAAAAQAAAAxlblVTAAAAGgAAABwAUAB1AGIAbABpAGMAIABEAG8AbQBhAGkA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');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      }
+  language: css
+libraries: |
+  https://appsforoffice.microsoft.com/lib/1/hosted/office.js
+  https://appsforoffice.microsoft.com/lib/1/hosted/office.d.ts
+
+  https://unpkg.com/office-ui-fabric-core@11.1.0/dist/css/fabric.min.css
+  https://unpkg.com/office-ui-fabric-js@1.5.0/dist/css/fabric.components.min.css
+  js@1.5.0/dist/css/fabric.components.min.css
+  https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css
+  https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css
+  https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js
