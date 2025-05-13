@@ -786,9 +786,9 @@ script:
             }
 
             const price = parseFloat(precioUSD);
-            const monthprice = `=(${price.toFixed(4)} * 24 * 30)`;
-            const oneyearprice = `=(${price.toFixed(4)} * 24 * 30 * 12)`;
-            const threeyearprice = `=(${price.toFixed(4)} * 24 * 30 * 12 * 3)`;
+            const monthprice = `=(${price.toFixed(5)} *730)`;
+            const oneyearprice = `=(${price.toFixed(5)} * 730 * 12)`;
+            const threeyearprice = `=(${price.toFixed(5)} *730 * 12 * 3)`;
 
             if (price > 0) {
               allRows.push([
@@ -810,8 +810,8 @@ script:
                 upfrontFee3YrConvertible.toFixed(4),
                 upfrontFee1YrPartial.toFixed(4),
                 upfrontFee3YrPartial.toFixed(4),
-                `=${hourlyNoUpfront1Yr.toFixed(4)}*24*30*12`,
-                `=${hourlyNoUpfront3Yr.toFixed(4)}*24*30*12*3` // ✅ Nuevo campo agregado para No Upfront 3Yr
+                `=${hourlyNoUpfront1Yr.toFixed(5)}*730*12`,
+                `=${hourlyNoUpfront3Yr.toFixed(5)}*730*12*3` // ✅ Nuevo campo agregado para No Upfront 3Yr
               ]);
             }
           }
@@ -1412,9 +1412,9 @@ script:
                   //data.vcpu,
                   //data.physicalCores,
                   data.onDemandPrice.toFixed(3),
-                  `=${data.onDemandPrice.toFixed(3)}*24*30`,
-                  `=${data.onDemandPrice.toFixed(3)}*24*30*12`,
-                  `=(${data.onDemandPrice.toFixed(3)}*24*30*12)*3`,
+                  `=${data.onDemandPrice.toFixed(5)}*730`,
+                  `=${data.onDemandPrice.toFixed(5)}*730*12`,
+                  `=(${data.onDemandPrice.toFixed(5)}*730*12)*3`,
                   data.upfrontAll1Yr.toFixed(3),
                   data.upfrontAll3Yr.toFixed(3),
                   data.upfrontPartial1Yr.toFixed(3),
