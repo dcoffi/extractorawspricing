@@ -598,7 +598,8 @@ script:
                 MaxResults: 1
               })
               .promise();
-
+           // console.log(`${JSON.stringify(detalle,null,2)}`);
+           // return;
             if (!detalle.PriceList || detalle.PriceList.length === 0) continue;
 
             const item = detalle.PriceList[0];
@@ -610,6 +611,10 @@ script:
             let upfrontFee1YrConvertible = 0;
             let upfrontFee3YrConvertible = 0;
             let upfrontFee1YrPartial = 0;
+            let upfrontFee1YrFactor = 0;
+            let upfrontFee3YrFactor = 0;
+            let hourlyNoUpfront1YrFactor = 0;
+            let hourlyNoUpfront3YrFactor = 0;
             let upfrontFee3YrPartial = 0;
             let hourlyNoUpfront1Yr = 0;
             let hourlyNoUpfront3Yr = 0;
@@ -690,13 +695,107 @@ script:
                 ) {
                   for (const dimKey in priceDimensions) {
                     const dimension = priceDimensions[dimKey];
+                    const rateCode = dimension ?.rateCode || "";
+                    const instanciaFactor = attrs.instanceType || "";
                     if (dimension?.description === "Upfront Fee" && dimension?.pricePerUnit?.USD) {
                       upfrontFee1YrPartial = parseFloat(dimension.pricePerUnit.USD);
                       break;
                     }
                   }
                 }
+                
+                
+                /**********FACTOR********** */
+                // 🔹 Partial Upfront - 1 Año
+                if (
+                  reservedKey.includes("HU7G6KETJZ") &&
+                  attributes.LeaseContractLength === "1yr" &&
+                  attributes.PurchaseOption === "Partial Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    const rateCode = dimension ?.rateCode || "";
+                    const description = dimension ?.description || "";
 
+                    if (
+                      rateCode.includes("HU7G6KETJZ.6YS6EN2CT7") &&
+                        description.includes("reserved instance applied") &&
+                        dimension ?.pricePerUnit ?.USD
+        ) {
+                      upfrontFee1YrFactor = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+                /************************** */
+                // 🔹 Partial Upfront - 3 Años
+                if (
+                  reservedKey.includes("38NPMPTW36") &&
+                  attributes.LeaseContractLength === "3yr" &&
+                  attributes.PurchaseOption === "Partial Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    const rateCode = dimension ?.rateCode || "";
+                    const description = dimension ?.description || "";
+
+                    if (
+                      rateCode.includes("38NPMPTW36.6YS6EN2CT7") &&
+                        description.includes("reserved instance applied") &&
+                        dimension ?.pricePerUnit ?.USD
+        ) {
+                      upfrontFee3YrFactor = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                // 🔹 No Upfront - 1 Año
+                if (
+                  reservedKey.includes("4NA7Y494T4") &&
+                  attributes.LeaseContractLength === "1yr" &&
+                  attributes.PurchaseOption === "No Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    const rateCode = dimension ?.rateCode || "";
+                    const description = dimension ?.description || "";
+
+                    if (
+                      rateCode.includes("4NA7Y494T4.6YS6EN2CT7") &&
+                        description.includes("reserved instance applied") &&
+                        dimension ?.pricePerUnit ?.USD
+        ) {
+                      hourlyNoUpfront1YrFactor = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+
+                // 🔹 No Upfront - 3 Años
+                if (
+                  reservedKey.includes("BPH4J8HBKS") &&
+                  attributes.LeaseContractLength === "3yr" &&
+                  attributes.PurchaseOption === "No Upfront"
+                ) {
+                  for (const dimKey in priceDimensions) {
+                    const dimension = priceDimensions[dimKey];
+                    const rateCode = dimension ?.rateCode || "";
+                    const description = dimension ?.description || "";
+
+                    if (
+                      rateCode.includes("BPH4J8HBKS.6YS6EN2CT7") &&
+                        description.includes("reserved instance applied") &&
+                        dimension ?.pricePerUnit ?.USD
+        ) {
+                      hourlyNoUpfront3YrFactor = parseFloat(dimension.pricePerUnit.USD);
+                      break;
+                    }
+                  }
+                }
+
+                /*************FIN FACTOR************* */
                 // 🔹 Partial Upfront - 3 Años
                 if (
                   reservedKey.includes("38NPMPTW36") &&
@@ -725,12 +824,13 @@ script:
                       dimension.description.includes("reserved instance applied") &&
                       dimension?.pricePerUnit?.USD
                     ) {
-                      hourlyNoUpfront1Yr = parseFloat(dimension.pricePerUnit.USD);
+                      //hourlyNoUpfront1Yr = parseFloat(dimension.pricePerUnit.USD);
+                      hourlyNoUpfront1Yr=0;
                       break;
                     }
                   }
                 }
-
+                
                 // 🔹 No Upfront - 3 Años
                 if (
                   reservedKey.includes("BPH4J8HBKS") &&
@@ -744,7 +844,8 @@ script:
                       dimension.description.includes("reserved instance applied") &&
                       dimension?.pricePerUnit?.USD
                     ) {
-                      hourlyNoUpfront3Yr = parseFloat(dimension.pricePerUnit.USD);
+                      //hourlyNoUpfront3Yr = parseFloat(dimension.pricePerUnit.USD);
+                      hourlyNoUpfront3Yr=0;
                       break;
                     }
                   }
@@ -806,13 +907,14 @@ script:
                 threeyearprice,
                 upfrontFee1Yr.toFixed(4),
                 upfrontFee3Yr.toFixed(4),
-                upfrontFee1YrConvertible.toFixed(4),
-                upfrontFee3YrConvertible.toFixed(4),
-                upfrontFee1YrPartial.toFixed(4),
-                upfrontFee3YrPartial.toFixed(4),
-                `=${hourlyNoUpfront1Yr.toFixed(5)}*730*12`,
-                `=${hourlyNoUpfront3Yr.toFixed(5)}*730*12*3` // ✅ Nuevo campo agregado para No Upfront 3Yr
+                upfrontFee1YrConvertible.toFixed(5),
+                upfrontFee3YrConvertible.toFixed(5),
+                `=${upfrontFee1YrPartial.toFixed(5)}+(730*${upfrontFee1YrFactor}*12)`,
+                `=${upfrontFee3YrPartial.toFixed(5)}+(730*${upfrontFee3YrFactor}*36)`,
+                `=${hourlyNoUpfront1Yr.toFixed(5)}+(730*${hourlyNoUpfront1YrFactor}*12)`,
+                `=${hourlyNoUpfront3Yr.toFixed(5)}+(730*${hourlyNoUpfront3YrFactor}*36)` // ✅ Nuevo campo agregado para No Upfront 3Yr
               ]);
+
             }
           }
 
@@ -822,7 +924,29 @@ script:
           // Insertar datos
           if (allRows.length > 0) {
             hoja1.getRange(`A3:T${allRows.length + 2}`).values = allRows;
-           
+            const rangoAreemplazar = hoja1.getRange("E:E").getUsedRange();
+            rangoAreemplazar.load("values,rowIndex,rowCount");
+            await context.sync();
+            const nuevasFilas = rangoAreemplazar.values.map(fila => {
+              const valor = fila[0];
+              if (typeof valor === "string") {
+                return [valor.replace(" GiB", "")];
+              }
+              return [valor];
+            });
+
+            const rangoAActualizar = hoja1.getRangeByIndexes(
+              rangoAreemplazar.rowIndex,
+              4, // columna E es índice 4
+              rangoAreemplazar.rowCount,
+              1
+            );
+
+            rangoAActualizar.values = nuevasFilas;
+            await context.sync();
+
+            rangoAActualizar.values = nuevasFilas;
+            await context.sync();
             document.getElementById("mensajeAlerta").style.display = "none";
           } else {
             // console.log(`No fueron encontrados registros para la región ${zona}`);
@@ -1240,7 +1364,7 @@ script:
               nextToken = data.NextToken;
             } while (nextToken);
            // console.log(`todoslosproductos: ${JSON.stringify(allProducts,null,2)}`);
-            // return;
+           //  return;
             const instanceMap = {};
 
             // Procesar cada producto
@@ -1312,6 +1436,35 @@ script:
                     if (rateCode.includes("DXEJ4EGHUJ.2TG2D8R56U")) {
                       instanceMap[instanceType].upfrontAll1Yr = parseFloat(usdPrice);
                       //   console.log(`Instancia: ${instanceType}, Precio: ${parseFloat(usdPrice)}`);
+                    }
+                    // Capturar precio por hora exacto usando rateCode + descripción
+                    if (
+                      rateCode.includes("JKEYCZ7TXH.6YS6EN2CT7") &&
+                      description.includes("Dedicated Host Reservation hours used this month")
+                    ) {
+                      instanceMap[instanceType].hourlyReservedPartial1Yr = parseFloat(usdPrice);
+                    //  console.log(`✅ [MATCH] Instancia: ${instanceType}, hourlyReservedPartial1Yr: ${usdPrice}`);
+                    }
+                    if (
+                      rateCode.includes("R6AKCSNU9E.6YS6EN2CT7") &&
+                      description.includes("Dedicated Host Reservation hours used this month")
+                    ) {
+                      instanceMap[instanceType].hourlyReservedPartial3Yr = parseFloat(usdPrice);
+                      //console.log(`✅ [MATCH] Instancia: ${instanceType}, hourlyReservedPartial3Yr: ${usdPrice}`);
+                    }
+                    if (
+                      rateCode.includes("6UMEV7DJNR.6YS6EN2CT7") &&
+                      description.includes("Dedicated Host Reservation hours used this month")
+                    ) {
+                      instanceMap[instanceType].hourlyReservedNoUpfront1Yr = parseFloat(usdPrice);
+                      //console.log(`✅ [MATCH] Instancia: ${instanceType}, hourlyReservedPartial3Yr: ${usdPrice}`);
+                    }
+                    if (
+                      rateCode.includes("PKMSUWYE48.6YS6EN2CT7") &&
+                      description.includes("Dedicated Host Reservation hours used this month")
+                    ) {
+                      instanceMap[instanceType].hourlyReservedNoUpfront3Yr = parseFloat(usdPrice);
+                      //console.log(`✅ [MATCH] Instancia: ${instanceType}, hourlyReservedPartial3Yr: ${usdPrice}`);
                     }
                     if (rateCode.includes("YKSHTEAGQM.2TG2D8R56U")) {
                       //  console.log(`Instancia: ${instanceType}, Precio: ${usdPrice}`);
@@ -1417,10 +1570,10 @@ script:
                   `=(${data.onDemandPrice.toFixed(5)}*730*12)*3`,
                   data.upfrontAll1Yr.toFixed(3),
                   data.upfrontAll3Yr.toFixed(3),
-                  data.upfrontPartial1Yr.toFixed(3),
-                  data.upfrontPartial3Yr.toFixed(3),
-                  data.noUpfront1Yr.toFixed(3),
-                  data.noUpfront3Yr.toFixed(3)
+                  `=${data.upfrontPartial1Yr.toFixed(3)}+(730*${data.hourlyReservedPartial1Yr.toFixed(6)}*12)`,
+                  `=${data.upfrontPartial3Yr.toFixed(3)}+(730*${data.hourlyReservedPartial3Yr.toFixed(6)}*36)`,
+                  `=${data.noUpfront1Yr.toFixed(3)}+(730*${data.hourlyReservedNoUpfront1Yr.toFixed(6)})*12`,
+                  `=${data.noUpfront3Yr.toFixed(3)}+(730*${data.hourlyReservedNoUpfront3Yr})*36`
                 ]
               ];
               row++;
@@ -1429,12 +1582,71 @@ script:
             const usedRange = credSheet.getUsedRange(); // Para detectar cuántas filas hay
             usedRange.load("rowCount");
             await context.sync();
-
+            
             const lastRow = usedRange.rowCount;
             // Formatear la columna I (columna número 9, ya que comienza en 1)
             const rangeColumnas = credSheet.getRange(`G3:P${lastRow}`);
 
             rangeColumnas.numberFormat = [["0.00"]]; // Dos decimales
+            
+            /*********REEMPLAZAR POR BYOL************** */
+            // Obtener el rango usado en la columna F (índice 5)
+            const rangoUsadoF = credSheet.getRange("F:F").getUsedRange();
+            rangoUsadoF.load("values, rowIndex, rowCount");
+            await context.sync();
+
+            // Reemplazar "No License required" por "BYOL"
+            const nuevasFilas = rangoUsadoF.values.map(fila => {
+              const valor = fila[0];
+              if (typeof valor === "string" && valor.trim() === "No License required") {
+                return ["BYOL"];
+              }
+              return [valor];
+            });
+
+            // Aplicar los cambios
+            const rangoAActualizar = credSheet.getRangeByIndexes(
+              rangoUsadoF.rowIndex,
+              5, // columna F = índice 5
+              rangoUsadoF.rowCount,
+              1
+            );
+
+            rangoAActualizar.values = nuevasFilas;
+            await context.sync();
+
+            /*********FIN REEMPLAZAR POR BYOL********** */
+            /*********REEMPLAZAR POR TENANCY************** */
+            // Obtener el rango usado en la columna E (índice 5)
+           
+            const rangoUsadoE = credSheet.getRange("E:E").getUsedRange();
+            rangoUsadoE.load("values, rowIndex, rowCount");
+            await context.sync();
+
+            // Reemplazar "No License required" por "BYOL"
+            const nuevasFilasE = rangoUsadoE.values.map(fila => {
+              const valorE = fila[0];
+              if (typeof valorE === "string" && (valorE.trim() === "Host" || valorE.trim() === "Reserved") ) {
+                return ["DH"];
+              }
+              return [valorE];
+            });
+
+            // Aplicar los cambios
+            const rangoAActualizarE = credSheet.getRangeByIndexes(
+              rangoUsadoE.rowIndex,
+              4, // columna E = índice 4
+              rangoUsadoE.rowCount,
+              1
+            );
+
+            rangoAActualizarE.values = nuevasFilasE;
+            await context.sync();
+            
+
+          /*********FIN REEMPLAZAR POR TENANCY********** */
+
+
           } catch (error) {
             console.error("Error al obtener los precios:", error);
           }
@@ -1558,7 +1770,7 @@ script:
     }
   language: typescript
 template:
-  content: "<div><span class=\"badge text-bg-dark\" id=\"pintaMensaje\">Versión 1.0</span></div>\n<div class=\"logo\"></div>\n<div id=\"spinner\" style=\"display: none;\">\n\t<button class=\"btn btn-success\" type=\"button\" disabled>\n    <span class=\"spinner-border spinner-border-sm\" aria-hidden=\"true\"></span>\n    <span role=\"status\">Calculando Precios...</span>\n  </button>\n</div>\n<h2 class=\"text-center\" id=\"titulo\">Instancias Compartidas</h2>\n\n<i class=\"fa-solid fa-earth-americas\" style=\"color: #3d85c6;\"></i>\n<strong style=\"margin-left:19px;\">Regiones</strong><select id=\"selectUbicaciones\" class=\"ms-Dropdown\" style=\"margin-left:20px;\">\n</select>\n<div style=\"display: flex; align-items: center; gap: 20px;\">\n\t<i class=\"fa-solid fa-server\"></i> <strong>Sistema Operativo</strong>\n\t<select id=\"osSelect\" class=\"ms-Dropdown\" style=\"width: 200px;\">\n\t    <option value=\"Linux\">Linux <i class=\"fa-brands fa-linux\" style=\"color: green;\"></i></option>\n\t    <option value=\"Windows\">Windows <i class=\"fa-brands fa-windows\" style=\"color: #0078D4;\"></i></option>\n\t    <option value=\"RHEL\">Red Hat <i class=\"fa-brands fa-redhat\" style=\"color: #E00;\"></i></option>\n\t    <option value=\"Suse\">SUSE <i class=\"fa-brands fa-suse\" style=\"color: #76B900;\"></i></option>\n\t\t\t<option value=\"Todos\">Todos <i class=\"fa-solid fa-asterisk\"></i></option>\n\t  </select>\n\n\t<i id=\"osIcon\" class=\"fa-brands fa-linux\" style=\"font-size: 50px; color: #0078D4; width: 70px;height: 70px; border-radius: 50%;display: flex;\"></i>\n</div>\n<div style=\"margin-top: 12px;gap: 20px;\" id=\"seccionPreinstalled\">\n\t<i class=\"fa-solid fa-database\" style=\"color:#16537e;\"></i> <strong>Pre-Installed Software</strong> <select id=\"preInstalledSw\" class=\"ms-Dropdown\" style=\"margin-left:18px;\">\n\t        <option value=\"na\">NA (BYOL)</option>\n\t        <option value=\"SQL Web\">SQL WEB</option>\n\t        <option value=\"SQL Std\">SQL STD</option>\n\t        <option value=\"SQL Ent\">SQL ENT</option>\n\t      </select>\n</div>\n<!-- Contenedor con botones alineados horizontalmente -->\n<div class=\"d-flex align-items-center gap-4 mt-2\">\n\t<!-- Botón cargar instancias -->\n\t<button id=\"cargarInstancias\" class=\"btn btn-primary d-flex align-items-center gap-2\">\n    <i class=\"fa-solid fa-upload\" style=\"color:#073763;\"></i> Cargar instancias\n  </button>\n\n\t<!--\n\t<button type=\"button\" class=\"btn btn-success\" id=\"consolidar\">\n\t\t<i class=\"fa-solid fa-file-excel\"></i>\n    Consolidar Hoja\n  </button>\n\t-->\n\t<!-- Botón para abrir modal -->\n\t<button id=\"toggleButton\" class=\"btn btn-outline-secondary\">Alojamientos Dedicados</button>\n\n\t<!--CREDENCIALES-->\n\n\t<button class=\"btn btn-dark\" id=\"credenciales\" type=\"button\" data-bs-toggle=\"offcanvas\" data-bs-target=\"#offcanvasRight\" aria-controls=\"offcanvasRight\"><i class=\"fa-solid fa-key\" style=\"color:gray;\"></i> Credenciales</button>\n\n\t<div class=\"offcanvas offcanvas-end\" tabindex=\"-1\" id=\"offcanvasRight\" aria-labelledby=\"offcanvasRightLabel\">\n\t\t<div class=\"logo\"></div>\n\t\t<div class=\"offcanvas-header\">\n\t\t\t<h5 class=\"offcanvas-title\" id=\"offcanvasRightLabel\">CREDENCIALES</h5>\n\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"offcanvas\" aria-label=\"Close\"></button>\n\t\t</div>\n\t\t<div class=\"offcanvas-body\">\n\t\t\t<div class=\"row justify-content-center\">\n\t\t\t\t<div class=\"col-12 col-md-8\">\n\t\t\t\t\t<label class=\"d-block text-center mb-1\">Coloque su clave</label>\n\t\t\t\t\t<input type=\"password\" class=\"form-control mb-3\" id=\"claveAWS\" placeholder=\"Clave AWS\" data-bs-toggle=\"tooltip\" data-bs-placement=\"left\"\n\t\t\t\t\t\tdata-bs-custom-class=\"custom-tooltip\"\n\t\t\t\t\t\tdata-bs-title=\"Coloque la clave proporcionada por AWS.\">\n\t\t\t\t\t<label class=\"d-block text-center mb-1\">Coloque su secreto</label>\n\t\t\t\t\t<input type=\"password\" class=\"form-control\" id=\"secretoAWS\" placeholder=\"Secreto AWS\" data-bs-toggle=\"tooltip\" data-bs-placement=\"left\"\n\t\t\t\t\t\tdata-bs-custom-class=\"custom-tooltip\"\n\t\t\t\t\t\tdata-bs-title=\"Coloque el secreto proporcionado por AWS.\">\n\t        </div>\n\t\t\t\t\t<div class=\"d-flex justify-content-center\">\n\t\t\t\t\t\t<div>\n\t\t\t\t\t\t\t<button class=\"btn btn-dark mt-3\" id=\"guardarAWS\" type=\"button\">Guardar Credenciales</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t\t<!--FIN BOTON CREDENCIALES-->\n\t</div>\n\n\t<!-- Modal de Confirmación -->\n\t<div class=\"modal fade\" id=\"confirmModal\" tabindex=\"-1\" aria-labelledby=\"confirmModalLabel\" aria-hidden=\"true\">\n\t\t<div class=\"modal-dialog modal-dialog-centered\">\n\t\t\t<div class=\"modal-content\">\n\t\t\t\t<div class=\"modal-header\">\n\t\t\t\t\t<h5 class=\"modal-title\" id=\"confirmModalLabel\"></i></h5>\n<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Cerrar\"></button>\n</div>\n<div class=\"modal-body\" id=\"confirmModalBody\">\n\n</div>\n<div class=\"modal-footer\">\n\t<button type=\"button\" class=\"btn btn-danger\" data-bs-dismiss=\"modal\">No <i class=\"fa-solid fa-circle-xmark\" style=\"color:white;\"></i></button>\n\t<button type=\"button\" class=\"btn btn-success\" id=\"confirmYes\">Sí <i class=\"fa-solid fa-circle-check\" style=\"color:white;\"></i></button>\n</div>\n</div>\n</div>\n</div>\n</div>\n\n<br>\n<div class=\"modal fade\" id=\"autoCierreModal\" tabindex=\"-1\" aria-labelledby=\"autoCierreModalLabel\" aria-hidden=\"true\">\n\t<div class=\"modal-dialog\">\n\t\t<div class=\"modal-content\">\n\t\t\t<div class=\"modal-header\">\n\t\t\t\t<h5 class=\"modal-title\" id=\"autoCierreModalLabel\">Mensaje Importante</h5>\n\t\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Close\"></button>\n\t\t\t</div>\n\t\t\t<div class=\"modal-body\" id=\"modal-body\">\n\t\t\t\tPor favor seleccione una ubicación\n\t\t\t</div>\n\t\t\t<div class=\"modal-footer\">\n\t\t\t\t<button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Cerrar</button>\n\t\t\t</div>\n\t\t</div>\n\t</div>\n</div>\n<br>\n<div class=\"alert alert-danger\" style=\"display:none;\" role=\"alert\" id=\"mensajeAlerta\">\n\n</div>"
+  content: "<div><span class=\"badge text-bg-dark\" id=\"pintaMensaje\">Versión 1.0</span></div>\n<div class=\"logo\"></div>\n<div id=\"spinner\" style=\"display: none;\">\n\t<button class=\"btn btn-success\" type=\"button\" disabled>\n    <span class=\"spinner-border spinner-border-sm\" aria-hidden=\"true\"></span>\n    <span role=\"status\">Calculando Precios...</span>\n  </button>\n</div>\n<h2 class=\"text-center\" id=\"titulo\">Instancias Compartidas</h2>\n\n<i class=\"fa-solid fa-earth-americas\" style=\"color: #3d85c6;\"></i>\n<strong style=\"margin-left:19px;\">Regiones</strong><select id=\"selectUbicaciones\" class=\"ms-Dropdown\" style=\"margin-left:20px;\">\n</select>\n<div style=\"display: flex; align-items: center; gap: 20px;\">\n\t<i class=\"fa-solid fa-server\"></i> <strong>Sistema Operativo</strong>\n\t<select id=\"osSelect\" class=\"ms-Dropdown\" style=\"width: 200px;\">\n\t    <option value=\"Linux\">Linux <i class=\"fa-brands fa-linux\" style=\"color: green;\"></i></option>\n\t    <option value=\"Windows\">Windows <i class=\"fa-brands fa-windows\" style=\"color: #0078D4;\"></i></option>\n\t    <option value=\"RHEL\">Red Hat <i class=\"fa-brands fa-redhat\" style=\"color: #E00;\"></i></option>\n\t    <option value=\"Suse\">SUSE <i class=\"fa-brands fa-suse\" style=\"color: #76B900;\"></i></option>\n\t\t\t<option value=\"Todos\">Todos <i class=\"fa-solid fa-asterisk\"></i></option>\n\t  </select>\n\n\t<i id=\"osIcon\" class=\"fa-brands fa-linux\" style=\"font-size: 50px; color: #0078D4; width: 70px;height: 70px; border-radius: 50%;display: flex;\"></i>\n</div>\n<div style=\"margin-top: 12px;gap: 20px;\" id=\"seccionPreinstalled\">\n\t<i class=\"fa-solid fa-database\" style=\"color:#16537e;\"></i> <strong>Pre-Installed Software</strong> <select id=\"preInstalledSw\" class=\"ms-Dropdown\" style=\"margin-left:18px;\">\n\t        <option value=\"na\">NA (BYOL)</option>\n\t        <option value=\"SQL Web\">SQL WEB</option>\n\t        <option value=\"SQL Std\">SQL STD</option>\n\t        <option value=\"SQL Ent\">SQL ENT</option>\n\t      </select>\n</div>\n<!-- Contenedor con botones alineados horizontalmente -->\n<div class=\"d-flex align-items-center gap-4 mt-2\">\n\t<!-- Botón cargar instancias -->\n\t<button id=\"cargarInstancias\" class=\"btn btn-primary d-flex align-items-center gap-2\">\n    <i class=\"fa-solid fa-upload\" style=\"color:#073763;\"></i> Cargar instancias\n  </button>\n\n\t<!--\n\t<button type=\"button\" class=\"btn btn-success\" id=\"consolidar\">\n\t\t<i class=\"fa-solid fa-file-excel\"></i>\n    Consolidar Hoja\n  </button>\n\t-->\n\t<!-- Botón para abrir modal -->\n\t<button id=\"toggleButton\" class=\"btn btn-outline-secondary\">Alojamientos Dedicados</button>\n\n\t<!--CREDENCIALES-->\n\n\t<button class=\"btn btn-dark\" id=\"credenciales\" type=\"button\" data-bs-toggle=\"offcanvas\" data-bs-target=\"#offcanvasRight\" aria-controls=\"offcanvasRight\"><i class=\"fa-solid fa-key\" style=\"color:gray;\"></i> Credenciales</button>\n\n\t<div class=\"offcanvas offcanvas-end\" tabindex=\"-1\" id=\"offcanvasRight\" aria-labelledby=\"offcanvasRightLabel\">\n\t\t<div class=\"logo\"></div>\n\t\t<div class=\"offcanvas-header\">\n\t\t\t<h5 class=\"offcanvas-title\" id=\"offcanvasRightLabel\">CREDENCIALES</h5>\n\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"offcanvas\" aria-label=\"Close\"></button>\n\t\t</div>\n\t\t<div class=\"offcanvas-body\">\n\t\t\t<div class=\"row justify-content-center\">\n\t\t\t\t<div class=\"col-12 col-md-8\">\n\t\t\t\t\t<label class=\"d-block text-center mb-1\">Coloque su clave</label>\n\t\t\t\t\t<input type=\"password\" class=\"form-control mb-3\" id=\"claveAWS\" placeholder=\"Clave AWS\" data-bs-toggle=\"tooltip\" data-bs-placement=\"left\"\n\t\t\t\t\t\tdata-bs-custom-class=\"custom-tooltip\"\n\t\t\t\t\t\tdata-bs-title=\"Coloque la clave proporcionada por AWS.\">\n\t\t\t\t\t<label class=\"d-block text-center mb-1\">Coloque su secreto</label>\n\t\t\t\t\t<input type=\"password\" class=\"form-control\" id=\"secretoAWS\" placeholder=\"Secreto AWS\" data-bs-toggle=\"tooltip\" data-bs-placement=\"left\"\n\t\t\t\t\t\tdata-bs-custom-class=\"custom-tooltip\"\n\t\t\t\t\t\tdata-bs-title=\"Coloque el secreto proporcionado por AWS.\">\n\t        </div>\n\t\t\t\t\t<div class=\"d-flex justify-content-center\">\n\t\t\t\t\t\t<div>\n\t\t\t\t\t\t\t<button class=\"btn btn-dark mt-3\" id=\"guardarAWS\" type=\"button\">Guardar Credenciales</button>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t\t<!--FIN BOTON CREDENCIALES-->\n\t</div>\n\n\t<!-- Modal de Confirmación -->\n\t<div class=\"modal fade\" id=\"confirmModal\" tabindex=\"-1\" aria-labelledby=\"confirmModalLabel\" aria-hidden=\"true\">\n\t\t<div class=\"modal-dialog modal-dialog-centered\">\n\t\t\t<div class=\"modal-content\">\n\t\t\t\t<div class=\"modal-header\">\n\t\t\t\t\t<h5 class=\"modal-title\" id=\"confirmModalLabel\"></i></h5>\n<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Cerrar\"></button>\n</div>\n<div class=\"modal-body\" id=\"confirmModalBody\">\n\n</div>\n<div class=\"modal-footer\">\n\t<button type=\"button\" class=\"btn btn-danger\" data-bs-dismiss=\"modal\">No <i class=\"fa-solid fa-circle-xmark\" style=\"color:white;\"></i></button>\n\t<button type=\"button\" class=\"btn btn-success\" id=\"confirmYes\">Sí <i class=\"fa-solid fa-circle-check\" style=\"color:white;\"></i></button>\n</div>\n</div>\n</div>\n</div>\n</div>\n\n<br>\n<div class=\"modal fade\" id=\"autoCierreModal\" tabindex=\"-1\" aria-labelledby=\"autoCierreModalLabel\" aria-hidden=\"true\">\n\t<div class=\"modal-dialog\">\n\t\t<div class=\"modal-content\">\n\t\t\t<div class=\"modal-header\">\n\t\t\t\t<h5 class=\"modal-title\" id=\"autoCierreModalLabel\">Mensaje Importante</h5>\n\t\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Close\"></button>\n\t\t\t</div>\n\t\t\t<div class=\"modal-body\" id=\"modal-body\">\n\t\t\t\tPor favor seleccione una ubicación\n\t\t\t</div>\n\t\t\t<div class=\"modal-footer\">\n\t\t\t\t<button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Cerrar</button>\n\t\t\t</div>\n\t\t</div>\n\t</div>\n</div>\n<br>\n<div class=\"alert alert-danger\" style=\"display:none;\" role=\"alert\" id=\"mensajeAlerta\">\n\n</div>\n\n\n\n<!-- Button trigger modal -->\n<!--\n<button type=\"button\" class=\"btn btn-primary\" data-bs-toggle=\"modal\" data-bs-target=\"#elvideo\">\n  Tutorial para crear el usuario en AWS\n</button>\n-->\n<!-- Modal -->\n<!--\n<div class=\"modal fade\" id=\"elvideo\" tabindex=\"-1\" aria-labelledby=\"elvideoLabel\" aria-hidden=\"true\">\n\t<div class=\"modal-dialog modal-xl\">\n\t\t<div class=\"modal-content\">\n\t\t\t<div class=\"modal-header\">\n\t\t\t\t<h1 class=\"modal-title fs-5\" id=\"elvideoLabel\">Tutorial para crear el usuario en AWS</h1>\n\t\t\t\t<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Close\"></button>\n\t\t\t</div>\n\t\t\t<div class=\"modal-body\">\n\t\t\t\t<div class=\"ratio ratio-16x9\">\n\t\t\t\t\t<iframe\n\t\t\t\t\t\tsrc=\"https://netorg686527-my.sharepoint.com/personal/daivinson_coffi_licensingassurance_com/_layouts/15/embed.aspx?UniqueId=d620eb02-34e8-4125-80f1-e3cba9febf11&embed=%7B%22ust%22%3Atrue%2C%22hv%22%3A%22CopyEmbedCode%22%7D&referrer=StreamWebApp&referrerScenario=EmbedDialog.Create\"\n\t\t\t\t\t\twidth=\"640\" height=\"360\" frameborder=\"0\" scrolling=\"no\" allowfullscreen\n\t\t\t\t\t\ttitle=\"Consultaswebtool_Def.m4v\"></iframe>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t\t<div class=\"modal-footer\">\n\t\t\t\t<button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Cerrar</button>\n\t\t\t\n\t\t\t</div>\n\t\t</div>\n\t</div>\n</div>\n-->"
   language: html
 style:
   content: |
